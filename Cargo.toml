@@ -1,0 +1,15 @@
+[package]
+name = "matching-tool"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+bincode = "1.3.3"
+clap = { version = "4.5.21", features = ["derive"] }
+rayon = "1.10.0"
+reqwest = { version = "0.12.8", features = ["blocking", "json"] }
+rust_xlsxwriter = "0.80.0"
+rustc-hash = "2.0.0"
+serde = { version = "1.0.212", features = ["derive"] }
+serde_json = "1.0.132"
+zip = "2.2.1"
