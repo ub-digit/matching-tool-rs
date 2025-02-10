@@ -50,7 +50,16 @@ fn convert_to_jsonarray(zipdata: BTreeMap<String, String>) -> (String, Vec<(Stri
         if !filename.ends_with(".json") {
             continue;
         }
-        let record: JsonRecordLoader = serde_json::from_str(&content).expect("Failed to parse JSON");
+        // Skip any path that starts with __MACOSX
+        if filename.starts_with("__MACOSX") {
+            continue;
+        }
+        let record: JsonRecordLoader = match serde_json::from_str(&content) {
+            Ok(record) => record,
+            Err(e) => {
+                panic!("Failed to parse JSON file {}: {}", filename, e);
+            }
+        };
         for (edition_idx, edition) in record.editions.iter().enumerate() {
             let jsonrecord = JsonRecord {
                 edition: edition_idx,
