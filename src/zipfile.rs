@@ -54,6 +54,10 @@ fn convert_to_jsonarray(zipdata: BTreeMap<String, String>) -> (String, Vec<(Stri
         if filename.starts_with("__MACOSX") {
             continue;
         }
+        // Skip any path that starts with .DS_Store
+        if filename.starts_with(".DS_Store") {
+            continue;
+        }
         let record: JsonRecordLoader = match serde_json::from_str(&content) {
             Ok(record) => record,
             Err(e) => {
