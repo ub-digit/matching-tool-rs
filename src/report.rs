@@ -76,6 +76,7 @@ fn create_markdown(config: &Config, stats: &MatchStatistics) -> String {
     markdown.push_str(&format!("| {} | {} |\n", "min_single_similarity", config.options.min_single_similarity.unwrap_or(0.0)));
     markdown.push_str(&format!("| {} | {} |\n", "weights_file", config.options.weights_file.as_ref().unwrap_or(&"default weights".to_string())));
     markdown.push_str(&format!("| {} | {} |\n", "extended_output", config.options.extended_output));
+    markdown.push_str(&format!("| {} | {} |\n", "min-multiple_similarity", config.options.min_multiple_similarity.unwrap_or(0.0)));
     markdown.push_str("\n");
     markdown.push_str("## Statistics\n\n");
     // Output the statistics in a table
@@ -92,6 +93,9 @@ fn create_markdown(config: &Config, stats: &MatchStatistics) -> String {
     if stats.match_stat(&MatchStat::MultipleMatches) > 0 {
         markdown.push_str(&format!("| {} | {} |\n", "Number of multiple matches", stats.match_stat(&MatchStat::MultipleMatches)));
     }
+    if stats.match_stat(&MatchStat::UnqualifiedMultipleMatches) > 0 {
+        markdown.push_str(&format!("| {} | {} |\n", "Number of unqualified multiple matches", stats.match_stat(&MatchStat::UnqualifiedMultipleMatches)));
+    }
     if stats.match_stat(&MatchStat::NoMatch) > 0 {
         markdown.push_str(&format!("| {} | {} |\n", "Number of no matches", stats.match_stat(&MatchStat::NoMatch)));
     }
@@ -106,6 +110,9 @@ fn create_markdown(config: &Config, stats: &MatchStatistics) -> String {
     }
     if stats.match_stat(&MatchStat::MultipleMatches) > 0 {
         markdown.push_str(&format!("| {} | {:.2} |\n", "Multiple match percentage", stats.match_stat_percent(&MatchStat::MultipleMatches)));
+    }
+    if stats.match_stat(&MatchStat::UnqualifiedMultipleMatches) > 0 {
+        markdown.push_str(&format!("| {} | {:.2} |\n", "Unqualified multiple match percentage", stats.match_stat_percent(&MatchStat::UnqualifiedMultipleMatches)));
     }
     if stats.match_stat(&MatchStat::NoMatch) > 0 {
         markdown.push_str(&format!("| {} | {:.2} |\n", "No match percentage", stats.match_stat_percent(&MatchStat::NoMatch)));
@@ -149,11 +156,12 @@ fn cmdline_to_run(markdown: &mut String, config: &Config) {
     let similarity_threshold = config.options.similarity_threshold.map_or("".to_string(), |x| format!("-O similarity-threshold={}", x));
     let z_threshold = config.options.z_threshold.map_or("".to_string(), |x| format!("-O z-threshold={}", x));
     let min_single_similarity = config.options.min_single_similarity.map_or("".to_string(), |x| format!("-O min-single-similarity={}", x));
+    let min_multiple_similarity = config.options.min_multiple_similarity.map_or("".to_string(), |x| format!("-O min-multiple-similarity={}", x));
     let weights_file = config.options.weights_file.as_ref().map_or("".to_string(), |x| format!("-O weights-file={}", x));
     let extended_output = if config.options.extended_output { "-O extended-output".to_string() } else { "".to_string() };
     let verbose = if config.verbose { "-v".to_string() } else { "".to_string() };
     // Combine them in order above
-    let combined_options = vec![command, source, input, output, output_format, vocab_file, vector_file, source_data_file, force_year, include_source_data, similarity_threshold, z_threshold, min_single_similarity, weights_file, extended_output, verbose];
+    let combined_options = vec![command, source, input, output, output_format, vocab_file, vector_file, source_data_file, force_year, include_source_data, similarity_threshold, z_threshold, min_single_similarity, min_multiple_similarity, weights_file, extended_output, verbose];
     let options = combined_options.iter().filter(|x| x.len() > 0).map(|x| x.to_string()).collect::<Vec<String>>().join(" ");
     let cmdline = format!("cargo run --release -- {}", options);
     markdown.push_str("\n");

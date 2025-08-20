@@ -69,6 +69,7 @@ pub struct ConfigOptions {
     pub similarity_threshold: Option<f32>,
     pub z_threshold: Option<f32>,
     pub min_single_similarity: Option<f32>,
+    pub min_multiple_similarity: Option<f32>,
     pub weights_file: Option<String>,
     pub extended_output: bool,
 }
@@ -133,6 +134,7 @@ fn parse_options(args: &Args) -> ConfigOptions {
         similarity_threshold: None,
         z_threshold: None,
         min_single_similarity: None,
+        min_multiple_similarity: None,
         weights_file: None,
         extended_output: false,
     };
@@ -151,6 +153,10 @@ fn parse_options(args: &Args) -> ConfigOptions {
             "min-single-similarity" => {
                 let value = ConfigOptions::f32_option(&option);
                 options.min_single_similarity = Some(value);
+            },
+            "min-multiple-similarity" => {
+                let value = ConfigOptions::f32_option(&option);
+                options.min_multiple_similarity = Some(value);
             },
             "weights-file" => {
                 let value = ConfigOptions::string_option(&option);

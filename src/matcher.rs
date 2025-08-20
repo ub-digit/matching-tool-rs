@@ -79,6 +79,7 @@ impl From<&JsonRecord> for ElasticRecord {
 pub enum MatchStat {
     SingleMatch,
     MultipleMatches,
+    UnqualifiedMultipleMatches,
     NoMatch,
     Unqualified, // Single not reaching min_single_similarity
     NoEdition, // No edition in the JSON record
@@ -90,6 +91,7 @@ impl MatchStat {
         match self {
             MatchStat::SingleMatch => "Single",
             MatchStat::MultipleMatches => "Multiple",
+            MatchStat::UnqualifiedMultipleMatches => "Unqualified multiple",
             MatchStat::NoMatch => "No match",
             MatchStat::Unqualified => "Unqualified",
             MatchStat::NoEdition => "No edition",
@@ -203,6 +205,7 @@ fn precalc_weighted_average_vectors_for_source(config: &Config, dataset_vectors:
 // Reads a zip file with json-files into Vec<JsonRecord>
 // via a Vec<JsonRecordLoader>
 pub fn match_json_zip(config: &Config) {
+    let (prompt, records) = read_json_zip_file(config, &config.input);
     let vocab = Vocab::load(&config.vocab_file);
     let dataset_vectors = Vectors::load(&config.dataset_vector_file);
     let source_data = source_data::SourceData::load(&config.source_data_file);
@@ -213,7 +216,7 @@ pub fn match_json_zip(config: &Config) {
     let weights = vector_weights(config);
     // let weights = unit_weights();
     let dataset_weighted_vectors = precalc_weighted_average_vectors_for_source(config, &dataset_vectors, &weights);
-    let (prompt, records) = read_json_zip_file(config, &config.input);
+    
     statistics.set_prompt(&prompt);
     for (card, record) in records {
         if config.verbose {
@@ -268,7 +271,16 @@ fn get_stats(config: &Config, top: &[(String, f32, f32)]) -> MatchStat {
                 MatchStat::SingleMatch
             }
         } else {
-            MatchStat::MultipleMatches
+
+            if let Some(min_multiple_similarity) = config.options.min_multiple_similarity {
+                if top.iter().all(|&(_, similarity, _)| similarity >= min_multiple_similarity) {
+                    MatchStat::MultipleMatches
+                } else {
+                    MatchStat::UnqualifiedMultipleMatches
+                }
+            } else {
+                MatchStat::MultipleMatches
+            }
         }
     } else {
         MatchStat::NA
