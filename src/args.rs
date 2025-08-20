@@ -70,6 +70,7 @@ pub struct ConfigOptions {
     pub z_threshold: Option<f32>,
     pub min_single_similarity: Option<f32>,
     pub weights_file: Option<String>,
+    pub extended_output: bool,
 }
 
 impl ConfigOptions {
@@ -133,6 +134,7 @@ fn parse_options(args: &Args) -> ConfigOptions {
         z_threshold: None,
         min_single_similarity: None,
         weights_file: None,
+        extended_output: false,
     };
     for option in args.options.clone() {
         match ConfigOptions::option_name(&option) {
@@ -154,6 +156,7 @@ fn parse_options(args: &Args) -> ConfigOptions {
                 let value = ConfigOptions::string_option(&option);
                 options.weights_file = Some(value);
             },
+            "extended-output" => options.extended_output = true,
             _ => {
                 eprintln!("Unknown option: {}", option);
                 std::process::exit(1);

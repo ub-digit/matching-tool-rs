@@ -75,6 +75,7 @@ fn create_markdown(config: &Config, stats: &MatchStatistics) -> String {
     markdown.push_str(&format!("| {} | {} |\n", "z_threshold", config.options.z_threshold.unwrap_or(0.0)));
     markdown.push_str(&format!("| {} | {} |\n", "min_single_similarity", config.options.min_single_similarity.unwrap_or(0.0)));
     markdown.push_str(&format!("| {} | {} |\n", "weights_file", config.options.weights_file.as_ref().unwrap_or(&"default weights".to_string())));
+    markdown.push_str(&format!("| {} | {} |\n", "extended_output", config.options.extended_output));
     markdown.push_str("\n");
     markdown.push_str("## Statistics\n\n");
     // Output the statistics in a table
@@ -149,9 +150,10 @@ fn cmdline_to_run(markdown: &mut String, config: &Config) {
     let z_threshold = config.options.z_threshold.map_or("".to_string(), |x| format!("-O z-threshold={}", x));
     let min_single_similarity = config.options.min_single_similarity.map_or("".to_string(), |x| format!("-O min-single-similarity={}", x));
     let weights_file = config.options.weights_file.as_ref().map_or("".to_string(), |x| format!("-O weights-file={}", x));
+    let extended_output = if config.options.extended_output { "-O extended-output".to_string() } else { "".to_string() };
     let verbose = if config.verbose { "-v".to_string() } else { "".to_string() };
     // Combine them in order above
-    let combined_options = vec![command, source, input, output, output_format, vocab_file, vector_file, source_data_file, force_year, include_source_data, similarity_threshold, z_threshold, min_single_similarity, weights_file, verbose];
+    let combined_options = vec![command, source, input, output, output_format, vocab_file, vector_file, source_data_file, force_year, include_source_data, similarity_threshold, z_threshold, min_single_similarity, weights_file, extended_output, verbose];
     let options = combined_options.iter().filter(|x| x.len() > 0).map(|x| x.to_string()).collect::<Vec<String>>().join(" ");
     let cmdline = format!("cargo run --release -- {}", options);
     markdown.push_str("\n");

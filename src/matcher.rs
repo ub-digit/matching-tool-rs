@@ -35,6 +35,8 @@ pub struct JsonRecordLoader {
     pub title: Option<String>, // title in the vectors
     #[serde(default)]
     pub author: Option<String>, // author in the vectors
+    #[serde(default)]
+    pub publication_type: Option<String>, // not used for matching
     pub editions: Vec<JsonEditionLoader>, // Partially used. If there are multiple editions, it is treated as if there are multiple records
 }
 
@@ -57,6 +59,7 @@ pub struct JsonRecord {
     pub author: String,
     pub location: String,
     pub year: String,
+    pub publication_type: String, // Not used for matching
 }
 
 impl From<&JsonRecord> for ElasticRecord {

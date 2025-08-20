@@ -71,6 +71,7 @@ fn convert_to_jsonarray(zipdata: BTreeMap<String, String>) -> (String, Vec<(Stri
                 author: record.author.clone().unwrap_or_default(),
                 location: edition.place_of_publication.clone().unwrap_or_default(),
                 year: edition.year_of_publication.clone().unwrap_or_default().to_string(),
+                publication_type: record.publication_type.clone().unwrap_or_default(),
             };
             jsonarray.push((filename.clone(), jsonrecord));
         }
@@ -82,6 +83,7 @@ fn convert_to_jsonarray(zipdata: BTreeMap<String, String>) -> (String, Vec<(Stri
                 author: record.author.clone().unwrap_or_default(),
                 location: String::new(),
                 year: String::new(),
+                publication_type: record.publication_type.clone().unwrap_or_default(),
             };
             jsonarray.push((filename.clone(), jsonrecord));
         }
