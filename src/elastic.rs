@@ -69,13 +69,18 @@ fn handle_response(response: reqwest::blocking::Response, total_count: u32) -> R
 
     let records = hits.iter().map(|hit| {
         let source = hit["_source"].clone();
+        let year = match &source["first_year"] {
+            serde_json::Value::String(year_str) => year_str.clone(),
+            serde_json::Value::Number(year_num) => year_num.to_string(),
+            _ => "".to_string(),
+        };
         Record {
             id: source["id"].as_str().unwrap().to_string(),
             source: source["source"].as_str().unwrap().to_string(),
             title: get_as_string(&source["title"]),
             author: get_as_string(&source["author"]),
             location: get_as_string(&source["publisher"]),
-            year: source["first_year"].as_str().unwrap_or("").to_string(),
+            year: year,
         }
     }).collect();
 
