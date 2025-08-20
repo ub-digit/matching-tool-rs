@@ -61,7 +61,17 @@ fn convert_to_jsonarray(zipdata: BTreeMap<String, String>) -> (String, Vec<(Stri
         let record: JsonRecordLoader = match serde_json::from_str(&content) {
             Ok(record) => record,
             Err(e) => {
-                panic!("Failed to parse JSON file {}: {}", filename, e);
+                // Try to load as a JsonRecordArrayLoader and if there is one and only one record,
+                // use that record, otherwise panic for every other reason.
+                if let Ok(mut json_array) = serde_json::from_str::<Vec<JsonRecordLoader>>(&content) {
+                    if json_array.len() == 1 {
+                        json_array.pop().unwrap() // At this point we know there is exactly one record
+                    } else {
+                        panic!("Expected one record in JSON array, found {}", json_array.len());
+                    }
+                } else {
+                    panic!("Failed to parse JSON file {}: {}", filename, e);
+                }
             }
         };
         for (edition_idx, edition) in record.editions.iter().enumerate() {
