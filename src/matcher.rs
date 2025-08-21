@@ -218,7 +218,12 @@ pub fn match_json_zip(config: &Config) {
     let dataset_weighted_vectors = precalc_weighted_average_vectors_for_source(config, &dataset_vectors, &weights);
     
     statistics.set_prompt(&prompt);
-    for (card, record) in records {
+    for (card, mut record) in records {
+        if config.options.add_author_to_title {
+            // If config.add_author_to_title is true, we add the author to the title
+            // This is used for matching with the source data
+            record.title = format!("{} / {}", record.title, record.author);
+        }
         if config.verbose {
             print!("Processing record: {} {} => ", card, record.edition);
         }

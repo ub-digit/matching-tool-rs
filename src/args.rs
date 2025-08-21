@@ -72,6 +72,7 @@ pub struct ConfigOptions {
     pub min_multiple_similarity: Option<f32>,
     pub weights_file: Option<String>,
     pub extended_output: bool,
+    pub add_author_to_title: bool,
 }
 
 impl ConfigOptions {
@@ -137,6 +138,7 @@ fn parse_options(args: &Args) -> ConfigOptions {
         min_multiple_similarity: None,
         weights_file: None,
         extended_output: false,
+        add_author_to_title: false,
     };
     for option in args.options.clone() {
         match ConfigOptions::option_name(&option) {
@@ -163,6 +165,7 @@ fn parse_options(args: &Args) -> ConfigOptions {
                 options.weights_file = Some(value);
             },
             "extended-output" => options.extended_output = true,
+            "add-author-to-title" => options.add_author_to_title = true,
             _ => {
                 eprintln!("Unknown option: {}", option);
                 std::process::exit(1);
