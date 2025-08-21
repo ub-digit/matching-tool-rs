@@ -73,11 +73,17 @@ pub struct ConfigOptions {
     pub weights_file: Option<String>,
     pub extended_output: bool,
     pub add_author_to_title: bool,
+    // Overlap adjustment, the value is the minimum number of characters that must overlap
+    pub overlap_adjustment: Option<i32>,
 }
 
 impl ConfigOptions {
     fn f32_option(s: &str) -> f32 {
         s.split('=').collect::<Vec<&str>>()[1].parse::<f32>().unwrap()
+    }
+
+    fn i32_option(s: &str) -> i32 {
+        s.split('=').collect::<Vec<&str>>()[1].parse::<i32>().unwrap()
     }
     
     fn string_option(s: &str) -> String {
@@ -139,6 +145,7 @@ fn parse_options(args: &Args) -> ConfigOptions {
         weights_file: None,
         extended_output: false,
         add_author_to_title: false,
+        overlap_adjustment: None,
     };
     for option in args.options.clone() {
         match ConfigOptions::option_name(&option) {
@@ -166,6 +173,10 @@ fn parse_options(args: &Args) -> ConfigOptions {
             },
             "extended-output" => options.extended_output = true,
             "add-author-to-title" => options.add_author_to_title = true,
+            "overlap-adjustment" => {
+                let value = ConfigOptions::i32_option(&option);
+                options.overlap_adjustment = Some(value);
+            },
             _ => {
                 eprintln!("Unknown option: {}", option);
                 std::process::exit(1);

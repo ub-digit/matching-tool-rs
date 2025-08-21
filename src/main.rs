@@ -9,6 +9,7 @@ mod source_data;
 mod report;
 mod output;
 mod zipfile;
+mod overlap;
 
 fn main() {
     let config = args::Config::new();

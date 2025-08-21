@@ -6,6 +6,7 @@ use crate::source_data::{self, SourceRecord};
 use crate::report;
 use crate::output;
 use crate::zipfile;
+use crate::overlap::maximal_overlaps;
 use serde::{Serialize, Deserialize};
 // use std::collections::{HashMap, BTreeMap};
 use std::collections::BTreeMap;
@@ -222,7 +223,7 @@ pub fn match_json_zip(config: &Config) {
         if config.options.add_author_to_title {
             // If config.add_author_to_title is true, we add the author to the title
             // This is used for matching with the source data
-            record.title = format!("{} / {}", record.title, record.author);
+            record.title = combine_title_and_author(&record.title, &record.author);
         }
         if config.verbose {
             print!("Processing record: {} {} => ", card, record.edition);
@@ -329,6 +330,8 @@ fn process_record(config: &Config, record: &JsonRecord, vocab: &Vocab, dataset_v
     top_n.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
     // Keep only the top N*10 (used for Z-scores)
     top_n.truncate(TOP_N*20);
+    // Apply overlap score to each top_n item
+    apply_overlap_score(config, &mut top_n, &record, source_data_records);
     // Calculate z-scores for the top N*10
     let mut z_scores = calculate_z_scores(top_n);
     // Sort by z-score and keep the top N
@@ -349,6 +352,103 @@ fn process_record(config: &Config, record: &JsonRecord, vocab: &Vocab, dataset_v
     //     }
     // }
     z_scores
+}
+
+// If author has a single comma, split it and join in reverse order with a space
+fn swap_author(author: &str) -> String {
+    let parts: Vec<&str> = author.split(',').collect();
+    if parts.len() == 2 {
+        format!("{} {}", parts[1].trim(), parts[0].trim())
+    } else {
+        author.to_string()
+    }
+}
+
+fn combine_title_and_author(title: &str, author: &str) -> String {
+    // Combine title and author with a slash
+    if title.is_empty() && author.is_empty() {
+        return "".to_string();
+    }
+    if title.is_empty() {
+        return author.to_string();
+    }
+    if author.is_empty() {
+        return title.to_string();
+    }
+    // If both title and author are present, strip any trailing whitespace and punctuation from the title
+    let title = title.trim_end_matches(|c: char| c.is_whitespace() || c.is_ascii_punctuation());
+    // Swap author if it has a single comma
+    format!("{} / {}", title, swap_author(author))
+}
+
+fn apply_overlap_score(config: &Config, top_n: &mut Vec<(String, f32)>, input_record: &JsonRecord, source_data_records: &FxHashMap<String, SourceRecord>) {
+    if config.options.overlap_adjustment.is_none() {
+        return; // No overlap adjustment configured, so return
+    }
+    // Calculate the overlap score for each top_n item
+    for (id, similarity) in top_n.iter_mut() {
+        if let Some(source_record) = source_data_records.get(id) {
+            let score = overlap_score(config, &source_record.title, &input_record.title);
+            *similarity *= score; // Adjust similarity by overlap score
+        }
+    }
+}
+
+// 1-\frac{1}{1+e^{\left(7.5x-2.8\right)}}+0.009
+// x == input score
+fn overlap_score_adjust(score: f32) -> f32 {
+    if score < 0.0 {
+        return 0.0;
+    }
+    if score >= 1.0 {
+        return 1.0;
+    }
+    // Apply the modified sigmoid function to the score
+    let exponent = (7.5 * score - 2.8).exp();
+    1.0 - 1.0 / (1.0 + exponent) + 0.009
+}
+
+// Calculate the overlap score from the pair of source_string and input_string
+fn overlap_score(config: &Config, source_string: &str, input_string: &str) -> f32 {
+    if config.options.overlap_adjustment.is_none() {
+        return 1.0; // No overlap adjustment configured, so return 1.0 keeping the similarity score unchanged
+    }
+    let overlap_threshold = config.options.overlap_adjustment.unwrap() as usize;
+    // Calculate the overlap score between source_string and input_string
+    let overlap = maximal_overlaps(source_string.to_lowercase(), input_string.to_lowercase());
+    // Remove overlaps that are too short (less than N characters)
+    let filtered_overlap: Vec<String> = overlap.iter().filter(|o| o.len() >= overlap_threshold).cloned().collect();
+    // If there are no overlaps, return 0.0
+    if filtered_overlap.is_empty() || input_string.is_empty() {
+        return 0.0;
+    }
+    // Calculate the overlap score as the combined length of the retained overlaps in relation to the input string length
+    overlap_score_adjust(filtered_overlap.iter().map(|o| o.len() as f32).sum::<f32>() / input_string.len() as f32)
+}
+
+fn debug_overlap(source_data_records: &FxHashMap<String, SourceRecord>, top: &[(String, f32, f32)], input_document: &JsonRecord) {
+    if top.is_empty() {
+        return; // No overlaps to debug
+    }
+    // Debug function to print overlaps of titles
+    println!("\nDEBUG: Title: {}", input_document.title);
+    for (id, sim, z) in top {
+        let mut overlap = vec![];
+        if let Some(source_record) = source_data_records.get(id) {
+            overlap = maximal_overlaps(source_record.title.to_lowercase(), input_document.title.to_lowercase());
+            // Remove overlaps that are too short (less than N characters)
+            overlap.retain(|o| o.len() >= 10);
+        }
+        // Overlap score is the combined length of the retained overlaps in relation to the input title length
+        // This will calculate a score between 0.0 and 1.0 where large overlaps indicate a high score
+        let overlap_score = if overlap.is_empty() || input_document.title.is_empty() {
+            0.0
+        } else {
+            overlap.iter().map(|o| o.len() as f32).sum::<f32>() / input_document.title.len() as f32
+        };
+        println!("Overlaps: [{} / {}: {} [{}] / {}], {}: {:?}", overlap_score, overlap_score_adjust(overlap_score), sim, overlap_score_adjust(overlap_score)*sim, z, id, overlap);
+    }
+    print!("Result: ");
 }
 
 fn cosine_similarity(vector1: &[(u32, f32)], vector1_selfdot: f32, vector2: &[(u32, f32)], vector2_selfdot: f32) -> f32 {
