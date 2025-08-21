@@ -77,6 +77,7 @@ fn create_markdown(config: &Config, stats: &MatchStatistics) -> String {
     markdown.push_str(&format!("| {} | {} |\n", "weights_file", config.options.weights_file.as_ref().unwrap_or(&"default weights".to_string())));
     markdown.push_str(&format!("| {} | {} |\n", "extended_output", config.options.extended_output));
     markdown.push_str(&format!("| {} | {} |\n", "add_author_to_title", config.options.add_author_to_title));
+    markdown.push_str(&format!("| {} | {} |\n", "overlap_adjustment", config.options.overlap_adjustment.unwrap_or(-1)));
     markdown.push_str(&format!("| {} | {} |\n", "min-multiple_similarity", config.options.min_multiple_similarity.unwrap_or(0.0)));
     markdown.push_str("\n");
     markdown.push_str("## Statistics\n\n");
@@ -161,9 +162,10 @@ fn cmdline_to_run(markdown: &mut String, config: &Config) {
     let weights_file = config.options.weights_file.as_ref().map_or("".to_string(), |x| format!("-O weights-file={}", x));
     let extended_output = if config.options.extended_output { "-O extended-output".to_string() } else { "".to_string() };
     let add_author_to_title = if config.options.add_author_to_title { "-O add-author-to-title".to_string() } else { "".to_string() };
+    let overlap_adjustment = config.options.overlap_adjustment.map_or("".to_string(), |x| format!("-O overlap-adjustment={}", x));
     let verbose = if config.verbose { "-v".to_string() } else { "".to_string() };
     // Combine them in order above
-    let combined_options = vec![command, source, input, output, output_format, vocab_file, vector_file, source_data_file, force_year, include_source_data, similarity_threshold, z_threshold, min_single_similarity, min_multiple_similarity, weights_file, extended_output, add_author_to_title, verbose];
+    let combined_options = vec![command, source, input, output, output_format, vocab_file, vector_file, source_data_file, force_year, include_source_data, similarity_threshold, z_threshold, min_single_similarity, min_multiple_similarity, weights_file, extended_output, add_author_to_title, overlap_adjustment, verbose];
     let options = combined_options.iter().filter(|x| x.len() > 0).map(|x| x.to_string()).collect::<Vec<String>>().join(" ");
     let cmdline = format!("cargo run --release -- {}", options);
     markdown.push_str("\n");
