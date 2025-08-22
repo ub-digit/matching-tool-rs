@@ -1,13 +1,94 @@
 use crate::args::Config;
 use crate::matcher::{vector_weights, MatchStatistics, MatchStat};
 use crate::output::Output;
+use rustc_hash::FxHashMap;
 use std::io::Write;
+use serde::{Serialize, Deserialize};
+use crate::args::ConfigOptions;
+
+#[derive(Serialize, Deserialize, Debug)]
+struct JsonReport {
+    source: String,
+    input: String,
+    output: Output,
+    vocab_file: String,
+    dataset_vector_file: String,
+    source_data_file: String,
+    weights: FxHashMap<String, f32>,
+    options: ConfigOptions,
+    stats: JsonMatchStatistics,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct JsonMatchStatistics {
+    number_of_records: usize,
+    match_types: FxHashMap<String, usize>,
+    prompt: String,
+}
+
+pub fn output_report(config: &Config, stats: &MatchStatistics) {
+    // Output JSON report
+    output_json_report(config, stats);
+
+    // Output markdown report
+    output_markdown_report(config, stats);
+
+}
+
+fn output_json_report(config: &Config, stats: &MatchStatistics) {
+    // Check if output is stdout, if so, skip this step
+    if let Output::Stdout = config.output {
+        return;
+    }
+
+    // Convert MatchStatistics to JsonMatchStatistics
+    let mut match_types = FxHashMap::default();
+    for (key, value) in &stats.match_types {
+        match_types.insert(key.to_string(), *value);
+    }
+    let stats = JsonMatchStatistics {
+        number_of_records: stats.number_of_records,
+        match_types,
+        prompt: stats.prompt_used.clone(),
+    };
+
+    // Create a JSON report
+    let report = JsonReport {
+        source: config.source.clone(),
+        input: config.input.clone(),
+        output: config.output.clone(),
+        vocab_file: config.vocab_file.clone(),
+        dataset_vector_file: config.dataset_vector_file.clone(),
+        source_data_file: config.source_data_file.clone(),
+        weights: vector_weights(config),
+        options: config.options.clone(),
+        stats: stats,
+    };
+
+    // Write the report to a file in the same name standard as the markdown report,
+    // but with the suffix -report.json instead of the original extension.
+    let mut report_filename;
+    if let Output::File(filename) = &config.output {
+        report_filename = filename.clone();
+    } else {
+        panic!("Output is not a file"); 
+    }
+    // Remove the extension from the filename so that filename.csv or filename.txt becomes filename-report.json
+    if let Some(pos) = report_filename.rfind('.') {
+        report_filename = report_filename[..pos].to_string();
+    }
+    report_filename.push_str("-report.json");
+    let mut report_file = std::fs::File::create(report_filename).unwrap();
+    // Write the report to the file
+    let json = serde_json::to_string_pretty(&report).unwrap();
+    report_file.write_all(json.as_bytes()).unwrap();
+}
 
 // Write a markdown report file with stats used for running the matcher
 // If the output is stdout, skip this step.
 // Otherwise the report is written to a file with the same name as the output file, 
 // but with the suffix -report.md instead of the original extension.
-pub fn output_report(config: &Config, stats: &MatchStatistics) {
+fn output_markdown_report(config: &Config, stats: &MatchStatistics) {
     // Check if output is stdout, if so, skip this step
     if let Output::Stdout = config.output {
         return;

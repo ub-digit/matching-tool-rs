@@ -5,6 +5,7 @@ pub mod text;
 use crate::args::Config;
 use crate::matcher::OutputRecord;
 use crate::args::OutputFormat;
+use serde::{Deserialize, Serialize};
 
 pub enum Cell {
     String(String),
@@ -12,7 +13,7 @@ pub enum Cell {
 }
 
 #[allow(dead_code)]
-#[derive(Debug)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Output {
     Stdout,
     File(String),

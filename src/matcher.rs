@@ -76,7 +76,7 @@ impl From<&JsonRecord> for ElasticRecord {
     }
 }
 
-#[derive(Debug, Eq, PartialEq, Clone, Hash)]
+#[derive(Debug, Eq, PartialEq, Clone, Hash, Serialize, Deserialize)]
 pub enum MatchStat {
     SingleMatch,
     MultipleMatches,
@@ -137,7 +137,7 @@ impl OutputRecord {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Serialize, Deserialize, Clone)]
 pub struct MatchStatistics {
     pub match_types: FxHashMap<MatchStat, usize>,
     pub number_of_records: usize,

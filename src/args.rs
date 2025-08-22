@@ -3,6 +3,7 @@ use crate::cmd::Cmd;
 use crate::output::Output;
 use std::fmt::{self, Display, Formatter};
 use rustc_hash::FxHashMap;
+use serde::{Deserialize, Serialize};
 
 #[derive(Parser)]
 struct Args {
@@ -62,7 +63,7 @@ pub struct Config {
     pub default_args: FxHashMap<String, bool>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ConfigOptions {
     pub force_year: bool,
     pub include_source_data: bool,
