@@ -343,6 +343,10 @@ fn process_record(config: &Config, record: &JsonRecord, vocab: &Vocab, dataset_v
     z_scores.truncate(TOP_N);
     // Filter all where similarity is 0.0
     z_scores.retain(|(_, similarity, _)| *similarity > 0.0);
+    // DEBUG: Filter all where similarity is below similarity_threshold
+    // if let Some(similarity_threshold) = config.options.similarity_threshold {
+    //     z_scores.retain(|(_, similarity, _)| *similarity >= similarity_threshold);
+    // }
     // If there is only one match left and min_single_similarity is set, filter out if below threshold
     // if z_scores.len() == 1 {
     //     if let Some(min_single_similarity) = config.options.min_single_similarity {
@@ -426,6 +430,7 @@ fn overlap_score(config: &Config, source_string: &str, input_string: &str) -> f3
     overlap_score_adjust(filtered_overlap.iter().map(|o| o.len() as f32).sum::<f32>() / input_string.len() as f32)
 }
 
+#[allow(dead_code)]
 fn debug_overlap(source_data_records: &FxHashMap<String, SourceRecord>, top: &[(String, f32, f32)], input_document: &JsonRecord) {
     if top.is_empty() {
         return; // No overlaps to debug
