@@ -343,10 +343,12 @@ fn process_record(config: &Config, record: &JsonRecord, vocab: &Vocab, dataset_v
     z_scores.truncate(TOP_N);
     // Filter all where similarity is 0.0
     z_scores.retain(|(_, similarity, _)| *similarity > 0.0);
-    // DEBUG: Filter all where similarity is below similarity_threshold
-    // if let Some(similarity_threshold) = config.options.similarity_threshold {
-    //     z_scores.retain(|(_, similarity, _)| *similarity >= similarity_threshold);
-    // }
+    // DEBUG: Filter all where similarity is below similarity_threshold and if overlap_adjustment is set
+    if let Some(similarity_threshold) = config.options.similarity_threshold {
+        if let Some(_overlap_threshold) = config.options.overlap_adjustment {
+            z_scores.retain(|(_, similarity, _)| *similarity >= similarity_threshold);
+        }
+    }
     // If there is only one match left and min_single_similarity is set, filter out if below threshold
     // if z_scores.len() == 1 {
     //     if let Some(min_single_similarity) = config.options.min_single_similarity {
