@@ -349,14 +349,7 @@ fn process_record(config: &Config, record: &JsonRecord, vocab: &Vocab, dataset_v
             z_scores.retain(|(_, similarity, _)| *similarity >= similarity_threshold);
         }
     }
-    // If there is only one match left and min_single_similarity is set, filter out if below threshold
-    // if z_scores.len() == 1 {
-    //     if let Some(min_single_similarity) = config.options.min_single_similarity {
-    //         if z_scores[0].1 < min_single_similarity {
-    //             z_scores.clear();
-    //         }
-    //     }
-    // }
+
     z_scores
 }
 
