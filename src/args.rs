@@ -76,6 +76,10 @@ pub struct ConfigOptions {
     pub add_author_to_title: bool,
     // Overlap adjustment, the value is the minimum number of characters that must overlap
     pub overlap_adjustment: Option<i32>,
+    // List of files containing IDs (one per line) to exclude from matching
+    pub exclude_files: Vec<String>,
+    // List of IDs to exclude from matching, populated from exclude_files
+    pub excluded_ids: Vec<String>,
 }
 
 impl ConfigOptions {
@@ -147,6 +151,8 @@ fn parse_options(args: &Args) -> ConfigOptions {
         extended_output: false,
         add_author_to_title: false,
         overlap_adjustment: None,
+        exclude_files: vec![],
+        excluded_ids: vec![],
     };
     for option in args.options.clone() {
         match ConfigOptions::option_name(&option) {
@@ -178,12 +184,17 @@ fn parse_options(args: &Args) -> ConfigOptions {
                 let value = ConfigOptions::i32_option(&option);
                 options.overlap_adjustment = Some(value);
             },
+            "exclude-file" => { // Repeatable option
+                let value = ConfigOptions::string_option(&option);
+                options.exclude_files.push(value);
+            },
             _ => {
                 eprintln!("Unknown option: {}", option);
                 std::process::exit(1);
             }
         }
     }
+    populate_excluded_ids(&mut options);
     options
 }
 
@@ -335,4 +346,28 @@ fn add_default_dataset_vector_file(config: &mut Config) {
     if config.dataset_vector_file == format!("data/{}-dataset-vectors.bin", config.source) {
         config.default_args.insert("dataset-vector-file".to_string(), true);
     }
+}
+
+// Read all exclude files and populate options.excluded_ids with each line from those files
+// Allow "#" for comments and ignore empty lines
+fn populate_excluded_ids(options: &mut ConfigOptions) {
+    let mut excluded_ids = Vec::new();
+    for filename in &options.exclude_files {
+        match std::fs::read_to_string(filename) {
+            Ok(content) => {
+                for line in content.lines() {
+                    let id = line.trim();
+                    if id.starts_with('#') || id.is_empty() {
+                        continue;
+                    }
+                    excluded_ids.push(id.to_string());
+                }
+            },
+            Err(e) => {
+                eprintln!("Failed to read exclude file {}: {}", filename, e);
+                std::process::exit(1);
+            }
+        }
+    }
+    options.excluded_ids = excluded_ids;
 }

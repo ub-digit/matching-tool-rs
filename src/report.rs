@@ -4,7 +4,6 @@ use crate::output::Output;
 use rustc_hash::FxHashMap;
 use std::io::Write;
 use serde::{Serialize, Deserialize};
-use crate::args::ConfigOptions;
 
 #[derive(Serialize, Deserialize, Debug)]
 struct JsonReport {
@@ -15,7 +14,7 @@ struct JsonReport {
     dataset_vector_file: String,
     source_data_file: String,
     weights: FxHashMap<String, f32>,
-    options: ConfigOptions,
+    options: JsonReportConfigOptions,
     stats: JsonMatchStatistics,
 }
 
@@ -24,6 +23,21 @@ struct JsonMatchStatistics {
     number_of_records: usize,
     match_types: FxHashMap<String, usize>,
     prompt: String,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct JsonReportConfigOptions {
+    force_year: bool,
+    include_source_data: bool,
+    similarity_threshold: Option<f32>,
+    z_threshold: Option<f32>,
+    min_single_similarity: Option<f32>,
+    min_multiple_similarity: Option<f32>,
+    weights_file: Option<String>,
+    extended_output: bool,
+    add_author_to_title: bool,
+    overlap_adjustment: Option<i32>,
+    exclude_files: Vec<String>,
 }
 
 pub fn output_report(config: &Config, stats: &MatchStatistics) {
@@ -52,6 +66,20 @@ fn output_json_report(config: &Config, stats: &MatchStatistics) {
         prompt: stats.prompt_used.clone(),
     };
 
+    let options = JsonReportConfigOptions {
+        force_year: config.options.force_year,
+        include_source_data: config.options.include_source_data,
+        similarity_threshold: config.options.similarity_threshold,
+        z_threshold: config.options.z_threshold,
+        min_single_similarity: config.options.min_single_similarity,
+        min_multiple_similarity: config.options.min_multiple_similarity,
+        weights_file: config.options.weights_file.clone(),
+        extended_output: config.options.extended_output,
+        add_author_to_title: config.options.add_author_to_title,
+        overlap_adjustment: config.options.overlap_adjustment,
+        exclude_files: config.options.exclude_files.clone(),
+    };
+
     // Create a JSON report
     let report = JsonReport {
         source: config.source.clone(),
@@ -61,7 +89,7 @@ fn output_json_report(config: &Config, stats: &MatchStatistics) {
         dataset_vector_file: config.dataset_vector_file.clone(),
         source_data_file: config.source_data_file.clone(),
         weights: vector_weights(config),
-        options: config.options.clone(),
+        options: options,
         stats: stats,
     };
 
@@ -159,6 +187,7 @@ fn create_markdown(config: &Config, stats: &MatchStatistics) -> String {
     markdown.push_str(&format!("| {} | {} |\n", "extended_output", config.options.extended_output));
     markdown.push_str(&format!("| {} | {} |\n", "add_author_to_title", config.options.add_author_to_title));
     markdown.push_str(&format!("| {} | {} |\n", "overlap_adjustment", config.options.overlap_adjustment.unwrap_or(-1)));
+    markdown.push_str(&format!("| {} | {} |\n", "exclude_files", if config.options.exclude_files.is_empty() { "none".to_string() } else { config.options.exclude_files.join(", ") }));
     markdown.push_str(&format!("| {} | {} |\n", "min-multiple_similarity", config.options.min_multiple_similarity.unwrap_or(0.0)));
     markdown.push_str("\n");
     markdown.push_str("## Statistics\n\n");
@@ -243,10 +272,11 @@ fn cmdline_to_run(markdown: &mut String, config: &Config) {
     let weights_file = config.options.weights_file.as_ref().map_or("".to_string(), |x| format!("-O weights-file={}", x));
     let extended_output = if config.options.extended_output { "-O extended-output".to_string() } else { "".to_string() };
     let add_author_to_title = if config.options.add_author_to_title { "-O add-author-to-title".to_string() } else { "".to_string() };
+    let exclude_files = if config.options.exclude_files.is_empty() { "".to_string() } else { config.options.exclude_files.iter().map(|f| format!("-O exclude-file={}", f)).collect::<Vec<String>>().join(" ") };
     let overlap_adjustment = config.options.overlap_adjustment.map_or("".to_string(), |x| format!("-O overlap-adjustment={}", x));
     let verbose = if config.verbose { "-v".to_string() } else { "".to_string() };
     // Combine them in order above
-    let combined_options = vec![command, source, input, output, output_format, vocab_file, vector_file, source_data_file, force_year, include_source_data, similarity_threshold, z_threshold, min_single_similarity, min_multiple_similarity, weights_file, extended_output, add_author_to_title, overlap_adjustment, verbose];
+    let combined_options = vec![command, source, input, output, output_format, vocab_file, vector_file, source_data_file, force_year, include_source_data, similarity_threshold, z_threshold, min_single_similarity, min_multiple_similarity, weights_file, extended_output, add_author_to_title, overlap_adjustment, exclude_files, verbose];
     let options = combined_options.iter().filter(|x| x.len() > 0).map(|x| x.to_string()).collect::<Vec<String>>().join(" ");
     let cmdline = format!("cargo run --release -- {}", options);
     markdown.push_str("\n");

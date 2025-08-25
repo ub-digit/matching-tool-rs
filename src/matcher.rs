@@ -305,26 +305,30 @@ fn process_record(config: &Config, record: &JsonRecord, vocab: &Vocab, dataset_v
     // let mut top_n: Vec<(String, f32)> = dataset_vectors.iter()
     let mut top_n: Vec<(String, f32)> = dataset_vectors.par_iter()
         .map(|document| {
-            let mut similarity = 
-                if config.options.force_year {
-                    if let Some(source_record) = source_data_records.get(&document.id) {
-                        if record.year == source_record.year || record.year == "0" {
-                            cosine_similarity(&input_combined_vector, self_dot, &document.vector, document.dot)
+            if config.options.excluded_ids.contains(&document.id) {
+                (document.id.clone(), 0.0) // Exclude this id by setting similarity to 0.0
+            } else {
+                let mut similarity = 
+                    if config.options.force_year {
+                        if let Some(source_record) = source_data_records.get(&document.id) {
+                            if record.year == source_record.year || record.year == "0" {
+                                cosine_similarity(&input_combined_vector, self_dot, &document.vector, document.dot)
+                            } else {
+                                0.0
+                            }
                         } else {
-                            0.0
+                            cosine_similarity(&input_combined_vector, self_dot, &document.vector, document.dot)
                         }
                     } else {
                         cosine_similarity(&input_combined_vector, self_dot, &document.vector, document.dot)
+                    };
+                if let Some(threshold) = config.options.similarity_threshold {
+                    if similarity < threshold {
+                        similarity = 0.0;
                     }
-                } else {
-                    cosine_similarity(&input_combined_vector, self_dot, &document.vector, document.dot)
-                };
-            if let Some(threshold) = config.options.similarity_threshold {
-                if similarity < threshold {
-                    similarity = 0.0;
                 }
+                (document.id.clone(), similarity)
             }
-            (document.id.clone(), similarity)
         })
         .collect();
     top_n.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
