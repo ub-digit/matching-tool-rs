@@ -89,3 +89,18 @@ cargo run --release -- -s libris -i /tmp/inputfile.zip -o output-dir/outputfile.
 This will create an Excel file in `output-dir` (the directory is assumed to exist) with the name `outputfile.xlsx` and a markdown file with the name `outputfile-report.md`.
 
 The tool will load the vector data and pre-process that data at the beginning of every execution, so it is preferable to run it with multiple json-files in the zip-file to make the most of the pre-processing.
+
+## Full list of options (-O)
+* `-O force-year` - force the year to be an exact match in the matching process (see below for fuzzy year matching).
+* `-O year-tolerance=1` - allow a tolerance of 1 year (must be 0 or positive integer) when matching the year (only used if `force-year` is set).
+* `-O year-tolerance-penalty=0.25` - penalty to apply to the similarity (per year difference) when using `year-tolerance` (only used if `force-year` and `year-tolerance` are set).
+* `-O include-source-data` - include the source data in the output Excel file (shows the Libris title/author/place/year in the output along with the zip file data).
+* `-O similarity-threshold=0.35` - the minimum similarity threshold for matching of the vectors to be considered a match at all (between 0 and 1).
+* `-O z-threshold=7` - the Z-score threshold for the matching process (no upper limit).
+* `-O min-single-similarity=0.5` - the minimum similarity for a match to be considered a good single match (between 0 and 1, only relevant if same or higher than `similarity-threshold`).
+* `-O min-multiple-similarity=0.5` - the minimum similarity for a match to be considered a useful multiple match (between 0 and 1, only relevant if same or higher than `similarity-threshold`). 
+* `-O weights-file=path-to-weights-file` - path to a custom weights file (if not set, default weights are used).
+* `-O extended-output` - include extended output in the Excel file (adding separate columns for box, card, cardID and several others used by GUB).
+* `-O add-author-to-title` - add the author to the title field in the vector calculation (can improve matching in some cases), simulates a "245c" field, which is now included in the libris-v1_5 weights.
+* `-O overlap-adjustment=10` - adjust the score based on large string overlaps (any positive integer, but small values are usually not very useful). This will reduce the similarity score for matches with that lack large overlaps, making matches with similar titles more likely to be singled out as good matches. It also adds the relevance for the order of words in the title. A value of 10 is usually a good starting point.
+* `-O exclude-file=file1 -O exclude-file=file2` - exclude IDs listed in the specified file (one ID per line). Can be used multiple times to exclude multiple files. Useful for doing a second run excluding IDs that were matched in a first run.
