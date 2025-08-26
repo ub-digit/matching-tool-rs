@@ -28,6 +28,8 @@ struct JsonMatchStatistics {
 #[derive(Serialize, Deserialize, Debug)]
 struct JsonReportConfigOptions {
     force_year: bool,
+    year_tolerance: Option<i32>,
+    year_tolerance_penalty: f32,
     include_source_data: bool,
     similarity_threshold: Option<f32>,
     z_threshold: Option<f32>,
@@ -68,6 +70,8 @@ fn output_json_report(config: &Config, stats: &MatchStatistics) {
 
     let options = JsonReportConfigOptions {
         force_year: config.options.force_year,
+        year_tolerance: config.options.year_tolerance,
+        year_tolerance_penalty: config.options.year_tolerance_penalty,
         include_source_data: config.options.include_source_data,
         similarity_threshold: config.options.similarity_threshold,
         z_threshold: config.options.z_threshold,
@@ -179,6 +183,10 @@ fn create_markdown(config: &Config, stats: &MatchStatistics) -> String {
     markdown.push_str(&format!("| {} | {} |\n", "Option", "Value"));
     markdown.push_str("| --- | --- |\n");
     markdown.push_str(&format!("| {} | {} |\n", "force_year", config.options.force_year));
+    if config.options.force_year {
+        markdown.push_str(&format!("| {} | {} |\n", "year_tolerance", if let Some(tol) = config.options.year_tolerance { tol.to_string() } else { "none".to_string() }));
+        markdown.push_str(&format!("| {} | {} |\n", "year_tolerance_penalty", if let Some(_tol) = config.options.year_tolerance { config.options.year_tolerance_penalty.to_string() } else { "N/A".to_string() }));
+    }
     markdown.push_str(&format!("| {} | {} |\n", "include_source_data", config.options.include_source_data));
     markdown.push_str(&format!("| {} | {} |\n", "similarity_threshold", config.options.similarity_threshold.unwrap_or(0.0)));
     markdown.push_str(&format!("| {} | {} |\n", "z_threshold", config.options.z_threshold.unwrap_or(0.0)));
@@ -264,6 +272,16 @@ fn cmdline_to_run(markdown: &mut String, config: &Config) {
     let vector_file = if config.default_args.contains_key("dataset-vector-file") { "".to_string() } else {format!("-D {}", config.dataset_vector_file) };
     let source_data_file = if config.default_args.contains_key("source-data-file") { "".to_string() } else {format!("-S {}", config.source_data_file) };
     let force_year = if config.options.force_year { "-O force-year".to_string() } else { "".to_string() };
+    let mut year_tolerance = "".to_string();
+    let mut year_tolerance_penalty = "".to_string();
+    if config.options.force_year {
+        if let Some(tol) = config.options.year_tolerance {
+            year_tolerance = format!("-O year-tolerance={}", tol);
+            if crate::args::DEFAULT_YEAR_TOLERANCE_PENALTY != config.options.year_tolerance_penalty {
+                year_tolerance_penalty = format!("-O year-tolerance-penalty={}", config.options.year_tolerance_penalty);
+            }
+        }
+    }
     let include_source_data = if config.options.include_source_data { "-O include-source-data".to_string() } else { "".to_string() };
     let similarity_threshold = config.options.similarity_threshold.map_or("".to_string(), |x| format!("-O similarity-threshold={}", x));
     let z_threshold = config.options.z_threshold.map_or("".to_string(), |x| format!("-O z-threshold={}", x));
@@ -276,7 +294,7 @@ fn cmdline_to_run(markdown: &mut String, config: &Config) {
     let overlap_adjustment = config.options.overlap_adjustment.map_or("".to_string(), |x| format!("-O overlap-adjustment={}", x));
     let verbose = if config.verbose { "-v".to_string() } else { "".to_string() };
     // Combine them in order above
-    let combined_options = vec![command, source, input, output, output_format, vocab_file, vector_file, source_data_file, force_year, include_source_data, similarity_threshold, z_threshold, min_single_similarity, min_multiple_similarity, weights_file, extended_output, add_author_to_title, overlap_adjustment, exclude_files, verbose];
+    let combined_options = vec![command, source, input, output, output_format, vocab_file, vector_file, source_data_file, force_year, year_tolerance, year_tolerance_penalty, include_source_data, similarity_threshold, z_threshold, min_single_similarity, min_multiple_similarity, weights_file, extended_output, add_author_to_title, overlap_adjustment, exclude_files, verbose];
     let options = combined_options.iter().filter(|x| x.len() > 0).map(|x| x.to_string()).collect::<Vec<String>>().join(" ");
     let cmdline = format!("cargo run --release -- {}", options);
     markdown.push_str("\n");

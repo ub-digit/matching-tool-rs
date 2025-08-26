@@ -305,30 +305,7 @@ fn process_record(config: &Config, record: &JsonRecord, vocab: &Vocab, dataset_v
     // let mut top_n: Vec<(String, f32)> = dataset_vectors.iter()
     let mut top_n: Vec<(String, f32)> = dataset_vectors.par_iter()
         .map(|document| {
-            if config.options.excluded_ids.contains(&document.id) {
-                (document.id.clone(), 0.0) // Exclude this id by setting similarity to 0.0
-            } else {
-                let mut similarity = 
-                    if config.options.force_year {
-                        if let Some(source_record) = source_data_records.get(&document.id) {
-                            if record.year == source_record.year || record.year == "0" {
-                                cosine_similarity(&input_combined_vector, self_dot, &document.vector, document.dot)
-                            } else {
-                                0.0
-                            }
-                        } else {
-                            cosine_similarity(&input_combined_vector, self_dot, &document.vector, document.dot)
-                        }
-                    } else {
-                        cosine_similarity(&input_combined_vector, self_dot, &document.vector, document.dot)
-                    };
-                if let Some(threshold) = config.options.similarity_threshold {
-                    if similarity < threshold {
-                        similarity = 0.0;
-                    }
-                }
-                (document.id.clone(), similarity)
-            }
+            process_one_item(config, &input_combined_vector, self_dot, record, document, source_data_records)
         })
         .collect();
     top_n.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
@@ -355,6 +332,57 @@ fn process_record(config: &Config, record: &JsonRecord, vocab: &Vocab, dataset_v
     }
 
     z_scores
+}
+
+fn process_one_item(config: &Config, input_combined_vector: &[(u32, f32)], self_dot: f32, record: &JsonRecord, document: &DatasetWeightedVector, source_data_records: &FxHashMap<String, SourceRecord>) -> (String, f32){
+    if config.options.excluded_ids.contains(&document.id) {
+        (document.id.clone(), 0.0) // Exclude this id by setting similarity to 0.0
+    } else {
+        let mut similarity = 
+            if config.options.force_year {
+                if let Some(source_record) = source_data_records.get(&document.id) {
+                    // Case where the year matches exactly (year_tolerance is not set or set to 0)
+                    if config.options.year_tolerance.is_none() || config.options.year_tolerance == Some(0) {
+                        if record.year == source_record.year || record.year == "0" {
+                            cosine_similarity(input_combined_vector, self_dot, &document.vector, document.dot)
+                        } else {
+                            0.0
+                        }
+                    // Case where year_tolerance is set to a positive integer
+                    } else if let Some(tolerance) = config.options.year_tolerance {
+                        if let Ok(record_year) = record.year.parse::<i32>() {
+                            if let Ok(source_year) = source_record.year.parse::<i32>() {
+                                let year_diff = (record_year - source_year).abs();
+                                if year_diff <= tolerance {
+                                    let base_similarity = cosine_similarity(input_combined_vector, self_dot, &document.vector, document.dot);
+                                    // Apply a penalty based on how far the year is from the source year
+                                    let penalty = 1.0 - (year_diff as f32 * config.options.year_tolerance_penalty);
+                                    base_similarity * penalty.max(0.0) // Ensure penalty does not go below 0.0
+                                } else {
+                                    0.0
+                                }
+                            } else {
+                                0.0 // Source year is not a valid number
+                            }
+                        } else {
+                            0.0 // Record year is not a valid number
+                        }
+                    } else {
+                        unreachable!() // This should not happen
+                    }
+                } else {
+                    cosine_similarity(input_combined_vector, self_dot, &document.vector, document.dot)
+                }
+            } else {
+                cosine_similarity(input_combined_vector, self_dot, &document.vector, document.dot)
+            };
+        if let Some(threshold) = config.options.similarity_threshold {
+            if similarity < threshold {
+                similarity = 0.0;
+            }
+        }
+        (document.id.clone(), similarity)
+    }
 }
 
 // If author has a single comma, split it and join in reverse order with a space

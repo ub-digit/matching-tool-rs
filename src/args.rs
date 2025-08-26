@@ -63,9 +63,15 @@ pub struct Config {
     pub default_args: FxHashMap<String, bool>,
 }
 
+pub const DEFAULT_YEAR_TOLERANCE_PENALTY: f32 = 0.25;
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ConfigOptions {
     pub force_year: bool,
+    // When using force_year, allow for N years difference, otherwise this option is ignored
+    pub year_tolerance: Option<i32>,
+    // When using year_tolerance, the year difference causes a penalty of year_difference * M (M defaults to 0.25)
+    pub year_tolerance_penalty: f32,
     pub include_source_data: bool,
     pub similarity_threshold: Option<f32>,
     pub z_threshold: Option<f32>,
@@ -142,6 +148,8 @@ impl Config {
 fn parse_options(args: &Args) -> ConfigOptions {
     let mut options = ConfigOptions {
         force_year: false,
+        year_tolerance: None,
+        year_tolerance_penalty: DEFAULT_YEAR_TOLERANCE_PENALTY,
         include_source_data: false,
         similarity_threshold: None,
         z_threshold: None,
@@ -157,6 +165,14 @@ fn parse_options(args: &Args) -> ConfigOptions {
     for option in args.options.clone() {
         match ConfigOptions::option_name(&option) {
             "force-year" => options.force_year = true,
+            "year-tolerance" => {
+                let value = ConfigOptions::i32_option(&option);
+                options.year_tolerance = Some(value);
+            },
+            "year-tolerance-penalty" => {
+                let value = ConfigOptions::f32_option(&option);
+                options.year_tolerance_penalty = value;
+            },
             "include-source-data" => options.include_source_data = true,
             "similarity-threshold" => {
                 let value = ConfigOptions::f32_option(&option);
