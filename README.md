@@ -86,7 +86,7 @@ The command is run using `cargo run --release --` followed by the options.
 cargo run --release -- -s libris -i /tmp/inputfile.zip -o output-dir/outputfile.xlsx -O force-year -O include-source-data -O similarity-threshold=0.35 -O z-threshold=7 -O min-single-similarity=0.5 -v
 ```
 
-This will create an Excel file in `output-dir` (the directory is assumed to exist) with the name `outputfile.xlsx` and a markdown file with the name `outputfile-report.md`.
+This will create an Excel file in `output-dir` (the directory will be created if it does not exist) with the name `outputfile.xlsx` and a markdown file with the name `outputfile-report.md`.
 
 The tool will load the vector data and pre-process that data at the beginning of every execution, so it is preferable to run it with multiple json-files in the zip-file to make the most of the pre-processing.
 
