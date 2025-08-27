@@ -39,6 +39,7 @@ struct JsonReportConfigOptions {
     extended_output: bool,
     add_author_to_title: bool,
     overlap_adjustment: Option<i32>,
+    jaro_winkler_adjustment: bool,
     exclude_files: Vec<String>,
 }
 
@@ -81,6 +82,7 @@ fn output_json_report(config: &Config, stats: &MatchStatistics) {
         extended_output: config.options.extended_output,
         add_author_to_title: config.options.add_author_to_title,
         overlap_adjustment: config.options.overlap_adjustment,
+        jaro_winkler_adjustment: config.options.jaro_winkler_adjustment,
         exclude_files: config.options.exclude_files.clone(),
     };
 
@@ -195,6 +197,7 @@ fn create_markdown(config: &Config, stats: &MatchStatistics) -> String {
     markdown.push_str(&format!("| {} | {} |\n", "extended_output", config.options.extended_output));
     markdown.push_str(&format!("| {} | {} |\n", "add_author_to_title", config.options.add_author_to_title));
     markdown.push_str(&format!("| {} | {} |\n", "overlap_adjustment", config.options.overlap_adjustment.unwrap_or(-1)));
+    markdown.push_str(&format!("| {} | {} |\n", "jaro_winkler_adjustment", config.options.jaro_winkler_adjustment));
     markdown.push_str(&format!("| {} | {} |\n", "exclude_files", if config.options.exclude_files.is_empty() { "none".to_string() } else { config.options.exclude_files.join(", ") }));
     markdown.push_str(&format!("| {} | {} |\n", "min-multiple_similarity", config.options.min_multiple_similarity.unwrap_or(0.0)));
     markdown.push_str("\n");
@@ -292,9 +295,10 @@ fn cmdline_to_run(markdown: &mut String, config: &Config) {
     let add_author_to_title = if config.options.add_author_to_title { "-O add-author-to-title".to_string() } else { "".to_string() };
     let exclude_files = if config.options.exclude_files.is_empty() { "".to_string() } else { config.options.exclude_files.iter().map(|f| format!("-O exclude-file={}", f)).collect::<Vec<String>>().join(" ") };
     let overlap_adjustment = config.options.overlap_adjustment.map_or("".to_string(), |x| format!("-O overlap-adjustment={}", x));
+    let jaro_winkler_adjustment = if config.options.jaro_winkler_adjustment { "-O jaro-winkler-adjustment".to_string() } else { "".to_string() };
     let verbose = if config.verbose { "-v".to_string() } else { "".to_string() };
     // Combine them in order above
-    let combined_options = vec![command, source, input, output, output_format, vocab_file, vector_file, source_data_file, force_year, year_tolerance, year_tolerance_penalty, include_source_data, similarity_threshold, z_threshold, min_single_similarity, min_multiple_similarity, weights_file, extended_output, add_author_to_title, overlap_adjustment, exclude_files, verbose];
+    let combined_options = vec![command, source, input, output, output_format, vocab_file, vector_file, source_data_file, force_year, year_tolerance, year_tolerance_penalty, include_source_data, similarity_threshold, z_threshold, min_single_similarity, min_multiple_similarity, weights_file, extended_output, add_author_to_title, overlap_adjustment, jaro_winkler_adjustment, exclude_files, verbose];
     let options = combined_options.iter().filter(|x| x.len() > 0).map(|x| x.to_string()).collect::<Vec<String>>().join(" ");
     let cmdline = format!("cargo run --release -- {}", options);
     markdown.push_str("\n");

@@ -311,8 +311,10 @@ fn process_record(config: &Config, record: &JsonRecord, vocab: &Vocab, dataset_v
     top_n.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
     // Keep only the top N*10 (used for Z-scores)
     top_n.truncate(TOP_N*20);
-    // Apply overlap score to each top_n item
+    // Apply overlap score to each top_n item (only if option is set)
     apply_overlap_score(config, &mut top_n, &record, source_data_records);
+    // Apply Jaro-Winkler to each top_n item (only if option is set)
+    apply_jaro_winkler(config, &mut top_n, &record, source_data_records);
     // Calculate z-scores for the top N*10
     let mut z_scores = calculate_z_scores(top_n);
     // Sort by z-score and keep the top N
@@ -324,10 +326,13 @@ fn process_record(config: &Config, record: &JsonRecord, vocab: &Vocab, dataset_v
     z_scores.truncate(TOP_N);
     // Filter all where similarity is 0.0
     z_scores.retain(|(_, similarity, _)| *similarity > 0.0);
-    // DEBUG: Filter all where similarity is below similarity_threshold and if overlap_adjustment is set
+    // Filter all where similarity is below similarity_threshold and if overlap_adjustment or jaro_winkler_adjustment is set
     if let Some(similarity_threshold) = config.options.similarity_threshold {
-        if let Some(_overlap_threshold) = config.options.overlap_adjustment {
-            z_scores.retain(|(_, similarity, _)| *similarity >= similarity_threshold);
+        match (config.options.overlap_adjustment, config.options.jaro_winkler_adjustment) {
+            (Some(_), _) | (_, true) => {
+                z_scores.retain(|(_, similarity, _)| *similarity >= similarity_threshold);
+            },
+            _ => {}
         }
     }
 
@@ -421,6 +426,19 @@ fn apply_overlap_score(config: &Config, top_n: &mut Vec<(String, f32)>, input_re
         if let Some(source_record) = source_data_records.get(id) {
             let score = overlap_score(config, &source_record.title, &input_record.title);
             *similarity *= score; // Adjust similarity by overlap score
+        }
+    }
+}
+
+fn apply_jaro_winkler(config: &Config, top_n: &mut Vec<(String, f32)>, input_record: &JsonRecord, source_data_records: &FxHashMap<String, SourceRecord>) {
+    if !config.options.jaro_winkler_adjustment {
+        return; // No Jaro-Winkler adjustment configured, so return
+    }
+    // Calculate the Jaro-Winkler score for each top_n item
+    for (id, similarity) in top_n.iter_mut() {
+        if let Some(source_record) = source_data_records.get(id) {
+            let jw_score = jaro_winkler::jaro_winkler(&source_record.title.to_lowercase(), &input_record.title.to_lowercase());
+            *similarity *= jw_score as f32; // Adjust similarity by Jaro-Winkler score
         }
     }
 }
