@@ -1,6 +1,7 @@
 pub mod csv;
 pub mod xlsx;
 pub mod text;
+pub mod json;
 
 use crate::args::Config;
 use crate::matcher::OutputRecord;
@@ -28,6 +29,7 @@ pub fn output_records(config: &Config, records: &[OutputRecord]) {
     }
     match (config.output_format, &config.output) {
         (OutputFormat::Text, Output::Stdout) => text::output_records(config,  records),
+        (OutputFormat::Json, Output::File(path)) => json::output_records(config, path, records),
         (OutputFormat::CSV, Output::File(path)) => csv::output_records(config, path, records),
         (OutputFormat::XLSX, Output::File(path)) => xlsx::output_records(config, path, records),
         _ => unimplemented!("Output format not implemented"),
