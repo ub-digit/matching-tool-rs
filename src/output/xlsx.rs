@@ -54,6 +54,10 @@ fn build_headers_extended(config: &Config) -> Vec<String> {
         headers.push("source_location".to_string());
         headers.push("source_year".to_string());
     }
+    headers.push("original_similarity".to_string());
+    headers.push("overlap_score".to_string());
+    headers.push("adjusted_overlap_score".to_string());
+    headers.push("jaro_winkler_score".to_string());
     headers
 }
 
@@ -95,7 +99,12 @@ fn build_normal_row(config: &Config, record: &OutputRecord, rows: &mut Vec<Vec<C
         ]);
         return;
     }
-    for (source_record, similarity, zscore) in &record.top {
+    for candidate in &record.top {
+        let source_record_id = if let Some(source_record) = &candidate.source_record {
+            source_record.id.clone()
+        } else {
+            "".to_string()
+        };
         let mut row = vec![
             Cell::String(record.card.clone()),
             Cell::Number(record.record.edition as f64),
@@ -104,15 +113,22 @@ fn build_normal_row(config: &Config, record: &OutputRecord, rows: &mut Vec<Vec<C
             Cell::String(record.record.location.clone()),
             Cell::String(record.record.year.to_string()),
             Cell::String(record.stats.to_string()),
-            Cell::String(source_record.id.clone()),
-            Cell::Number(*similarity as f64),
-            Cell::Number(*zscore as f64),
+            Cell::String(source_record_id),
+            Cell::Number(candidate.similarity as f64),
+            Cell::Number(candidate.zscore as f64),
         ];
         if config.options.include_source_data {
-            row.push(Cell::String(source_record.title.clone()));
-            row.push(Cell::String(source_record.author.clone()));
-            row.push(Cell::String(source_record.location.clone()));
-            row.push(Cell::String(source_record.year.to_string()));
+            if let Some(source_record) = &candidate.source_record {
+                row.push(Cell::String(source_record.title.clone()));
+                row.push(Cell::String(source_record.author.clone()));
+                row.push(Cell::String(source_record.location.clone()));
+                row.push(Cell::String(source_record.year.to_string()));
+            } else {
+                row.push(Cell::String("".to_string()));
+                row.push(Cell::String("".to_string()));
+                row.push(Cell::String("".to_string()));
+                row.push(Cell::String("".to_string()));
+            }
         }
         rows.push(row);
     }
@@ -147,9 +163,14 @@ fn build_extended_row(config: &Config, record: &OutputRecord, rows: &mut Vec<Vec
         ]);
         return;
     }
-    for (source_record, similarity, zscore) in &record.top {
+    for candidate in &record.top {
+        let source_record_id = if let Some(source_record) = &candidate.source_record {
+            source_record.id.clone()
+        } else {
+            "".to_string()
+        };
         // matched_ID is the last part of the source_record.id after the last slash
-        let matched_id = source_record.id.split('/').last().unwrap_or("");
+        let matched_id = source_record_id.split('/').last().unwrap_or("");
         let mut row = vec![
             Cell::String(box_name.clone()),
             Cell::String(card_name.clone()),
@@ -164,16 +185,27 @@ fn build_extended_row(config: &Config, record: &OutputRecord, rows: &mut Vec<Vec
             Cell::String(record.record.location.clone()),
             Cell::String(record.record.year.to_string()),
             Cell::String(record.stats.to_string()),
-            Cell::String(source_record.id.clone()),
-            Cell::Number(*similarity as f64),
-            Cell::Number(*zscore as f64),
+            Cell::String(source_record_id),
+            Cell::Number(candidate.similarity as f64),
+            Cell::Number(candidate.zscore as f64),
         ];
         if config.options.include_source_data {
-            row.push(Cell::String(source_record.title.clone()));
-            row.push(Cell::String(source_record.author.clone()));
-            row.push(Cell::String(source_record.location.clone()));
-            row.push(Cell::String(source_record.year.to_string()));
+            if let Some(source_record) = &candidate.source_record {
+                row.push(Cell::String(source_record.title.clone()));
+                row.push(Cell::String(source_record.author.clone()));
+                row.push(Cell::String(source_record.location.clone()));
+                row.push(Cell::String(source_record.year.to_string()));
+            } else {
+                row.push(Cell::String("".to_string()));
+                row.push(Cell::String("".to_string()));
+                row.push(Cell::String("".to_string()));
+                row.push(Cell::String("".to_string()));
+            }
         }
+        row.push(Cell::Number(candidate.original_similarity as f64));
+        row.push(Cell::Number(candidate.overlap_score as f64));
+        row.push(Cell::Number(candidate.adjusted_overlap_score as f64));
+        row.push(Cell::Number(candidate.jaro_winkler_score as f64));
         rows.push(row);
     }
 }

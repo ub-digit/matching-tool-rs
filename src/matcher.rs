@@ -104,22 +104,48 @@ impl MatchStat {
     }
 }
 
+// Struct to hold each candidate during match processing. Unused values (based on options) are set to 0.0
+#[derive(Debug, Clone, Default)]
+pub struct MatchCandidate {
+    pub id: String,
+    pub source_record: Option<SourceRecord>, // Added after all filters have been applied to reduce cloning
+    pub similarity: f32,
+    pub original_similarity: f32, // Before any adjustments
+    pub zscore: f32,
+    pub overlap_score: f32,
+    pub adjusted_overlap_score: f32,
+    pub jaro_winkler_score: f32,
+}
+
+impl MatchCandidate {
+    pub fn new(id: &str, similarity: f32) -> MatchCandidate {
+        MatchCandidate {
+            id: id.to_string(),
+            similarity,
+            original_similarity: similarity,
+            ..Default::default()
+        }
+    }
+}
+
 #[derive(Debug)] 
 pub struct OutputRecord {
     pub card: String,
     pub record: JsonRecord,
-    pub top: Vec<(SourceRecord, f32, f32)>,
+    pub top: Vec<MatchCandidate>,
     pub stats: MatchStat,
 }
 
 impl OutputRecord {
-    pub fn new(_config: &Config, card: &str, record: &JsonRecord, top: &[(String, f32, f32)], stats: MatchStat, source_data_records: &FxHashMap<String, SourceRecord>) -> OutputRecord {
+    pub fn new(_config: &Config, card: &str, record: &JsonRecord, top: &[MatchCandidate], stats: MatchStat, source_data_records: &FxHashMap<String, SourceRecord>) -> OutputRecord {
         // Remap top into a vector of (SourceRecord, f32, f32)
         let mut top_source_records = vec![];
 
-        for (id, similarity, zscore) in top {
-            if let Some(source_record) = source_data_records.get(id) {
-                top_source_records.push((source_record.clone(), *similarity, *zscore));
+        for candidate in top {
+            let mut new_candidate = candidate.clone();
+            if let Some(source_record) = source_data_records.get(&candidate.id) {
+                new_candidate.source_record = Some(source_record.clone());
+                top_source_records.push(new_candidate);
             }
         }
 
@@ -243,7 +269,7 @@ pub fn match_json_zip(config: &Config) {
                 println!("{}", stats.to_str());
             } else {
                 let topmost_similarity = match top.first() {
-                    Some((_, similarity, _)) => *similarity,
+                    Some(candidate) => candidate.similarity,
                     None => 0.0,
                 };
                 println!("{} ({})", stats.to_str(), topmost_similarity);
@@ -261,14 +287,14 @@ pub fn match_json_zip(config: &Config) {
 
 
 // Only relevant if similarity-threshold is set
-fn get_stats(config: &Config, top: &[(String, f32, f32)]) -> MatchStat {
+fn get_stats(config: &Config, top: &[MatchCandidate]) -> MatchStat {
     // Check if similarity-threshold is set, return NA if not
     if let Some(_) = config.options.similarity_threshold {
         if top.len() == 0 {
             MatchStat::NoMatch
         } else if top.len() == 1 {
             if let Some(min_single_similarity) = config.options.min_single_similarity {
-                if top[0].1 < min_single_similarity {
+                if top[0].similarity < min_single_similarity {
                     MatchStat::Unqualified
                 } else {
                     MatchStat::SingleMatch
@@ -279,7 +305,7 @@ fn get_stats(config: &Config, top: &[(String, f32, f32)]) -> MatchStat {
         } else {
 
             if let Some(min_multiple_similarity) = config.options.min_multiple_similarity {
-                if top.iter().all(|&(_, similarity, _)| similarity >= min_multiple_similarity) {
+                if top.iter().all(|candidate| candidate.similarity >= min_multiple_similarity) {
                     MatchStat::MultipleMatches
                 } else {
                     MatchStat::UnqualifiedMultipleMatches
@@ -293,7 +319,7 @@ fn get_stats(config: &Config, top: &[(String, f32, f32)]) -> MatchStat {
     }
 }
 
-fn process_record(config: &Config, record: &JsonRecord, vocab: &Vocab, dataset_vectors: &[DatasetWeightedVector], weights: &FxHashMap<String, f32>, source_data_records: &FxHashMap<String, SourceRecord>) -> Vec<(String, f32, f32)> {
+fn process_record(config: &Config, record: &JsonRecord, vocab: &Vocab, dataset_vectors: &[DatasetWeightedVector], weights: &FxHashMap<String, f32>, source_data_records: &FxHashMap<String, SourceRecord>) -> Vec<MatchCandidate> {
     // Tokenize each of author, title, location, year and combined (all)
     // Calculate the tf-idf for each word in each part
     // There should be a tf-idf vector for each part
@@ -303,12 +329,12 @@ fn process_record(config: &Config, record: &JsonRecord, vocab: &Vocab, dataset_v
     // Now we loop over all the dataset vectors and calculate the cosine similarity for their weighted average vector
     // We will keep the TOP_N most similar vectors
     // let mut top_n: Vec<(String, f32)> = dataset_vectors.iter()
-    let mut top_n: Vec<(String, f32)> = dataset_vectors.par_iter()
+    let mut top_n: Vec<MatchCandidate> = dataset_vectors.par_iter()
         .map(|document| {
             process_one_item(config, &input_combined_vector, self_dot, record, document, source_data_records)
         })
         .collect();
-    top_n.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
+    top_n.sort_by(|a, b| b.similarity.partial_cmp(&a.similarity).unwrap());
     // Keep only the top N*10 (used for Z-scores)
     top_n.truncate(TOP_N*20);
     // Apply overlap score to each top_n item (only if option is set)
@@ -318,19 +344,19 @@ fn process_record(config: &Config, record: &JsonRecord, vocab: &Vocab, dataset_v
     // Calculate z-scores for the top N*10
     let mut z_scores = calculate_z_scores(top_n);
     // Sort by z-score and keep the top N
-    z_scores.sort_by(|a, b| b.2.partial_cmp(&a.2).unwrap());
+    z_scores.sort_by(|a, b| b.zscore.partial_cmp(&a.zscore).unwrap());
     // If z-threshold is set, filter out all below the threshold
     if let Some(z_threshold) = config.options.z_threshold {
-        z_scores.retain(|(_, _, zscore)| *zscore > z_threshold);
+        z_scores.retain(|candidate| candidate.zscore > z_threshold);
     }
     z_scores.truncate(TOP_N);
     // Filter all where similarity is 0.0
-    z_scores.retain(|(_, similarity, _)| *similarity > 0.0);
+    z_scores.retain(|candidate| candidate.similarity > 0.0);
     // Filter all where similarity is below similarity_threshold and if overlap_adjustment or jaro_winkler_adjustment is set
     if let Some(similarity_threshold) = config.options.similarity_threshold {
         match (config.options.overlap_adjustment, config.options.jaro_winkler_adjustment) {
             (Some(_), _) | (_, true) => {
-                z_scores.retain(|(_, similarity, _)| *similarity >= similarity_threshold);
+                z_scores.retain(|candidate| candidate.similarity >= similarity_threshold);
             },
             _ => {}
         }
@@ -339,9 +365,9 @@ fn process_record(config: &Config, record: &JsonRecord, vocab: &Vocab, dataset_v
     z_scores
 }
 
-fn process_one_item(config: &Config, input_combined_vector: &[(u32, f32)], self_dot: f32, record: &JsonRecord, document: &DatasetWeightedVector, source_data_records: &FxHashMap<String, SourceRecord>) -> (String, f32){
+fn process_one_item(config: &Config, input_combined_vector: &[(u32, f32)], self_dot: f32, record: &JsonRecord, document: &DatasetWeightedVector, source_data_records: &FxHashMap<String, SourceRecord>) -> MatchCandidate {
     if config.options.excluded_ids.contains(&document.id) {
-        (document.id.clone(), 0.0) // Exclude this id by setting similarity to 0.0
+        MatchCandidate::new(&document.id, 0.0) // Exclude this id by setting similarity to 0.0
     } else {
         let mut similarity = 
             if config.options.force_year {
@@ -386,7 +412,7 @@ fn process_one_item(config: &Config, input_combined_vector: &[(u32, f32)], self_
                 similarity = 0.0;
             }
         }
-        (document.id.clone(), similarity)
+        MatchCandidate::new(&document.id.clone(), similarity)
     }
 }
 
@@ -417,28 +443,32 @@ fn combine_title_and_author(title: &str, author: &str) -> String {
     format!("{} / {}", title, swap_author(author))
 }
 
-fn apply_overlap_score(config: &Config, top_n: &mut Vec<(String, f32)>, input_record: &JsonRecord, source_data_records: &FxHashMap<String, SourceRecord>) {
+fn apply_overlap_score(config: &Config, top_n: &mut Vec<MatchCandidate>, input_record: &JsonRecord, source_data_records: &FxHashMap<String, SourceRecord>) {
     if config.options.overlap_adjustment.is_none() {
         return; // No overlap adjustment configured, so return
     }
     // Calculate the overlap score for each top_n item
-    for (id, similarity) in top_n.iter_mut() {
-        if let Some(source_record) = source_data_records.get(id) {
+    for candidate in top_n.iter_mut() {
+        if let Some(source_record) = source_data_records.get(&candidate.id) {
             let score = overlap_score(config, &source_record.title, &input_record.title);
-            *similarity *= score; // Adjust similarity by overlap score
+            candidate.overlap_score = score;
+            let score = overlap_score_adjust(score);
+            candidate.adjusted_overlap_score = score;
+            candidate.similarity *= score; // Adjust similarity by overlap score
         }
     }
 }
 
-fn apply_jaro_winkler(config: &Config, top_n: &mut Vec<(String, f32)>, input_record: &JsonRecord, source_data_records: &FxHashMap<String, SourceRecord>) {
+fn apply_jaro_winkler(config: &Config, top_n: &mut Vec<MatchCandidate>, input_record: &JsonRecord, source_data_records: &FxHashMap<String, SourceRecord>) {
     if !config.options.jaro_winkler_adjustment {
         return; // No Jaro-Winkler adjustment configured, so return
     }
     // Calculate the Jaro-Winkler score for each top_n item
-    for (id, similarity) in top_n.iter_mut() {
-        if let Some(source_record) = source_data_records.get(id) {
+    for candidate in top_n.iter_mut() {
+        if let Some(source_record) = source_data_records.get(&candidate.id) {
             let jw_score = jaro_winkler::jaro_winkler(&source_record.title.to_lowercase(), &input_record.title.to_lowercase());
-            *similarity *= jw_score as f32; // Adjust similarity by Jaro-Winkler score
+            candidate.jaro_winkler_score = jw_score as f32;
+            candidate.similarity *= jw_score as f32; // Adjust similarity by Jaro-Winkler score
         }
     }
 }
@@ -472,7 +502,7 @@ fn overlap_score(config: &Config, source_string: &str, input_string: &str) -> f3
         return 0.0;
     }
     // Calculate the overlap score as the combined length of the retained overlaps in relation to the input string length
-    overlap_score_adjust(filtered_overlap.iter().map(|o| o.len() as f32).sum::<f32>() / input_string.len() as f32)
+    filtered_overlap.iter().map(|o| o.len() as f32).sum::<f32>() / input_string.len() as f32
 }
 
 #[allow(dead_code)]
@@ -601,32 +631,32 @@ fn read_json_zip_file(config: &Config, filename: &str) -> (String, Vec<(String, 
 
 /// Calculate z-scores for a vector of (ID, similarity) pairs.
 /// Returns a vector of (ID, similarity, z-score) tuples.
-fn calculate_z_scores(data: Vec<(String, f32)>) -> Vec<(String, f32, f32)> {
+fn calculate_z_scores(mut data: Vec<MatchCandidate>) -> Vec<MatchCandidate> {
     let n = data.len();
     if n == 0 {
         return Vec::new();
     }
 
     // Calculate mean
-    let mean: f32 = data.iter().map(|(_, similarity)| similarity).sum::<f32>() / n as f32;
+    let mean: f32 = data.iter().map(|candidate| candidate.similarity).sum::<f32>() / n as f32;
 
     // Calculate standard deviation
     let variance: f32 = data
         .iter()
-        .map(|(_, similarity)| (similarity - mean).powi(2))
+        .map(|candidate| (candidate.similarity - mean).powi(2))
         .sum::<f32>()
         / n as f32;
     let std_dev = variance.sqrt();
 
     // Calculate z-scores
-    data.into_iter()
-        .map(|(id, similarity)| {
+    data.iter_mut()
+        .for_each(|candidate| {
             let z_score = if std_dev == 0.0 {
                 0.0 // Handle case where std_dev is 0 to avoid division by zero
             } else {
-                (similarity - mean) / std_dev
+                (candidate.similarity - mean) / std_dev
             };
-            (id, similarity, z_score)
-        })
-        .collect()
+            candidate.zscore = z_score;
+        });
+    data
 }

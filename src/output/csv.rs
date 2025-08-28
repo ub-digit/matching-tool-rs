@@ -24,7 +24,12 @@ fn build_headers(config: &Config) -> Vec<String> {
 fn build_rows(config: &Config, records: &[OutputRecord]) -> Vec<Vec<Cell>> {
     records.iter().flat_map(|record| {
         let mut rows = vec![];
-        for (source_record, similarity, zscore) in &record.top {
+        for candidate in &record.top {
+            let source_record_id = if let Some(source_record) = &candidate.source_record {
+                source_record.id.clone()
+            } else {
+                "".to_string()
+            };
             let mut row = vec![
                 Cell::String(record.card.clone()),
                 Cell::Number(record.record.edition as f64),
@@ -33,15 +38,22 @@ fn build_rows(config: &Config, records: &[OutputRecord]) -> Vec<Vec<Cell>> {
                 Cell::String(record.record.location.clone()),
                 Cell::String(record.record.year.to_string()),
                 Cell::String(record.stats.to_string()),
-                Cell::String(source_record.id.clone()),
-                Cell::Number(*similarity as f64),
-                Cell::Number(*zscore as f64),
+                Cell::String(source_record_id),
+                Cell::Number(candidate.similarity as f64),
+                Cell::Number(candidate.zscore as f64),
             ];
             if config.options.include_source_data {
-                row.push(Cell::String(source_record.title.clone()));
-                row.push(Cell::String(source_record.author.clone()));
-                row.push(Cell::String(source_record.location.clone()));
-                row.push(Cell::String(source_record.year.to_string()));
+                if let Some(source_record) = &candidate.source_record {
+                    row.push(Cell::String(source_record.title.clone()));
+                    row.push(Cell::String(source_record.author.clone()));
+                    row.push(Cell::String(source_record.location.clone()));
+                    row.push(Cell::String(source_record.year.to_string()));
+                } else {
+                    row.push(Cell::String("".to_string()));
+                    row.push(Cell::String("".to_string()));
+                    row.push(Cell::String("".to_string()));
+                    row.push(Cell::String("".to_string()));
+                }
             }
             rows.push(row);
         }

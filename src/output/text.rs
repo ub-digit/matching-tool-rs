@@ -28,11 +28,20 @@ fn output_header_text(_config: &Config, output: &mut dyn Write) {
 
 fn output_record_text(config: &Config, output: &mut dyn Write, record: &OutputRecord) {
     writeln!(output, "\n\nTop {} matches for record {} {}: {:?}", TOP_N, record.card, record.record.edition, record.record).unwrap();
-    for (source_record, similarity, zscore) in &record.top {
-        if config.options.include_source_data {
-            let _ = writeln!(output, "{}: {}  /  {}  ==>  Title: {}, Author: {}, Location: {}, Year: {}", source_record.id, similarity, zscore, source_record.title, source_record.author, source_record.location, source_record.year);
+    for candidate in &record.top {
+        let source_record_id = if let Some(source_record) = &candidate.source_record {
+            &source_record.id
         } else {
-            println!("{}: {}  /  {}", source_record.id, similarity, zscore);
+            ""
+        };
+        if config.options.include_source_data {
+            if let Some(source_record) = &candidate.source_record {
+                let _ = writeln!(output, "{}: {}  /  {}  ==>  Title: {}, Author: {}, Location: {}, Year: {}", source_record_id, candidate.similarity, candidate.zscore, source_record.title, source_record.author, source_record.location, source_record.year);
+            } else {
+                continue;
+            }
+        } else {
+            println!("{}: {}  /  {}", source_record_id, candidate.similarity, candidate.zscore);
         }
     }
 }
