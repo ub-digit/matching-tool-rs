@@ -493,6 +493,11 @@ fn overlap_score(config: &Config, source_string: &str, input_string: &str) -> f3
         return 1.0; // No overlap adjustment configured, so return 1.0 keeping the similarity score unchanged
     }
     let overlap_threshold = config.options.overlap_adjustment.unwrap() as usize;
+    // If input_string is shorter than overlap_threshold, reduce the threshold to the length of input_string
+    let overlap_threshold = overlap_threshold.min(input_string.len());
+    if overlap_threshold == 0 {
+        return 1.0; // If threshold is 0, return 1.0
+    }
     // Calculate the overlap score between source_string and input_string
     let overlap = maximal_overlaps(source_string.to_lowercase(), input_string.to_lowercase());
     // Remove overlaps that are too short (less than N characters)
