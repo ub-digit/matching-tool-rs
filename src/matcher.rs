@@ -84,6 +84,7 @@ pub enum MatchStat {
     NoMatch,
     Unqualified, // Single not reaching min_single_similarity
     NoEdition, // No edition in the JSON record
+    Excluded, // Excluded by id
     NA,
 }
 
@@ -96,6 +97,7 @@ impl MatchStat {
             MatchStat::NoMatch => "No match",
             MatchStat::Unqualified => "Unqualified",
             MatchStat::NoEdition => "No edition",
+            MatchStat::Excluded => "Excluded",
             MatchStat::NA => "",
         }
     }
@@ -254,6 +256,16 @@ pub fn match_json_zip(config: &Config) {
         if config.verbose {
             print!("Processing record: {} {} => ", card, record.edition);
         }
+        // Check if id is in input_excluded_ids of format
+        // jsonfilename:edition (as one string)
+        if input_is_excluded(config, &card, record.edition) {
+            if config.verbose {
+                println!("Excluded by id");
+            }
+            statistics.update(&MatchStat::Excluded, &card);
+            output_records.push(OutputRecord::new(config, &card, &record, &vec![], MatchStat::Excluded, &source_data_records));
+            continue;
+        }
         if record.edition > 100000 {
             if config.verbose {
                 println!("No edition");
@@ -285,6 +297,10 @@ pub fn match_json_zip(config: &Config) {
     report::output_report(config, &statistics);
 }
 
+fn input_is_excluded(config: &Config, card: &str, edition: usize) -> bool {
+    let id = format!("{}:{}", card, edition).trim().to_string();
+    config.options.input_excluded_ids.contains(&id)
+}
 
 // Only relevant if similarity-threshold is set
 fn get_stats(config: &Config, top: &[MatchCandidate]) -> MatchStat {
