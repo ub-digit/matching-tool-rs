@@ -53,6 +53,40 @@ pub struct JsonEditionLoader {
     pub year_of_publication: Option<u32>, // year in the vectors
 }
 
+// Same structure as JsonRecordLoader, but used for version 2 of the JSON input format
+#[derive(Debug, Serialize, Deserialize)]
+pub struct JsonRecordLoaderV2 {
+    #[serde(default)]
+    pub schema_version: Option<u32>,
+    #[serde(default)]
+    pub title: Option<String>, // title in the vectors
+    #[serde(default)]
+    pub author: Option<String>, // author in the vectors
+    #[serde(default)]
+    pub publication_type: Option<String>, // not used for matching
+    #[serde(default)]
+    pub is_reference_card: bool, // not used for matching
+    pub editions: Vec<JsonEditionLoaderV2>, // Partially used. If there are multiple editions, it is treated as if there are multiple records
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct JsonEditionLoaderV2 {
+    #[serde(default)]
+    pub part: Option<String>, // not used for matching
+    #[serde(default)]
+    pub format: Option<String>, // not used for matching
+    #[serde(default)]
+    pub place_of_publication: Vec<String>, // location in the vectors, will be joined with " "
+    #[serde(default)]
+    pub year_of_publication: Vec<u32>, // year in the vectors (only the lowest year value that is not 0 will be used and converted to string, or empty string if all values are 0 or there are no values)
+    #[serde(default)]
+    pub edition: Option<String>,
+    #[serde(default)]
+    pub volume_enumeration: Option<String>,
+    #[serde(default)]
+    pub serial_titles: Vec<String>,
+}
+
 #[derive(Debug, Clone)]
 pub struct JsonRecord {
     pub edition: usize,
@@ -644,7 +678,7 @@ fn read_json_zip_file(config: &Config, filename: &str) -> (String, Vec<(String, 
         if config.verbose {
             println!("Reading zip file: {}", filename);
         }
-        return zipfile::read_zip_file(filename);
+        return zipfile::read_zip_file(filename, config.options.json_schema_version);
     }
     // Only support zip-files.
     panic!("Only zip-files are supported as input for match-json-zip");

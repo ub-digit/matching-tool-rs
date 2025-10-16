@@ -84,6 +84,8 @@ pub struct ConfigOptions {
     pub overlap_adjustment: Option<i32>,
     // Jaro-Winkler adjustment, multiplier to similarity for Jaro-Winkler similarity between titles
     pub jaro_winkler_adjustment: bool,
+    // JSON schema version, version 2 is explicit, all others are version 1
+    pub json_schema_version: i32,
     // List of files containing IDs (one per line) to exclude from matching
     pub exclude_files: Vec<String>,
     // List of IDs to exclude from matching, populated from exclude_files
@@ -166,6 +168,7 @@ fn parse_options(args: &Args) -> ConfigOptions {
         add_author_to_title: false,
         overlap_adjustment: None,
         jaro_winkler_adjustment: false,
+        json_schema_version: 1,
         exclude_files: vec![],
         excluded_ids: vec![],
         input_exclude_files: vec![],
@@ -210,6 +213,10 @@ fn parse_options(args: &Args) -> ConfigOptions {
                 options.overlap_adjustment = Some(value);
             },
             "jaro-winkler-adjustment" => options.jaro_winkler_adjustment = true,
+            "json-schema-version" => {
+                let value = ConfigOptions::i32_option(&option);
+                options.json_schema_version = value;
+            },
             "exclude-file" => { // Repeatable option
                 let value = ConfigOptions::string_option(&option);
                 options.exclude_files.push(value);
