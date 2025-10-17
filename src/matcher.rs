@@ -23,6 +23,7 @@ pub struct JsonRecord {
     pub location: String,
     pub year: String,
     pub publication_type: String, // Not used for matching
+    pub allowed_years: Vec<u32>, // Not used for vector matching, but may be used for filtering later
 }
 
 impl From<&JsonRecord> for ElasticRecord {
@@ -348,44 +349,7 @@ fn process_one_item(config: &Config, input_combined_vector: &[(u32, f32)], self_
     if config.options.excluded_ids.contains(&document.id) {
         MatchCandidate::new(&document.id, 0.0) // Exclude this id by setting similarity to 0.0
     } else {
-        let mut similarity = 
-            if config.options.force_year {
-                if let Some(source_record) = source_data_records.get(&document.id) {
-                    // Case where the year matches exactly (year_tolerance is not set or set to 0)
-                    if config.options.year_tolerance.is_none() || config.options.year_tolerance == Some(0) {
-                        if record.year == source_record.year || record.year == "0" {
-                            cosine_similarity(input_combined_vector, self_dot, &document.vector, document.dot)
-                        } else {
-                            0.0
-                        }
-                    // Case where year_tolerance is set to a positive integer
-                    } else if let Some(tolerance) = config.options.year_tolerance {
-                        if let Ok(record_year) = record.year.parse::<i32>() {
-                            if let Ok(source_year) = source_record.year.parse::<i32>() {
-                                let year_diff = (record_year - source_year).abs();
-                                if year_diff <= tolerance {
-                                    let base_similarity = cosine_similarity(input_combined_vector, self_dot, &document.vector, document.dot);
-                                    // Apply a penalty based on how far the year is from the source year
-                                    let penalty = 1.0 - (year_diff as f32 * config.options.year_tolerance_penalty);
-                                    base_similarity * penalty.max(0.0) // Ensure penalty does not go below 0.0
-                                } else {
-                                    0.0
-                                }
-                            } else {
-                                0.0 // Source year is not a valid number
-                            }
-                        } else {
-                            0.0 // Record year is not a valid number
-                        }
-                    } else {
-                        unreachable!() // This should not happen
-                    }
-                } else {
-                    cosine_similarity(input_combined_vector, self_dot, &document.vector, document.dot)
-                }
-            } else {
-                cosine_similarity(input_combined_vector, self_dot, &document.vector, document.dot)
-            };
+        let mut similarity = calculate_similarity_score(config, record, source_data_records.get(&document.id), input_combined_vector, self_dot, document);
         if let Some(threshold) = config.options.similarity_threshold {
             if similarity < threshold {
                 similarity = 0.0;
@@ -393,6 +357,93 @@ fn process_one_item(config: &Config, input_combined_vector: &[(u32, f32)], self_
         }
         MatchCandidate::new(&document.id.clone(), similarity)
     }
+}
+
+fn calculate_similarity_score(config: &Config, record: &JsonRecord, source_record_opt: Option<&SourceRecord>, input_combined_vector: &[(u32, f32)], self_dot: f32, document: &DatasetWeightedVector) -> f32 {
+    if !config.options.force_year {
+        return calculate_base_similarity(input_combined_vector, self_dot, document);
+    }
+    if config.options.force_year && config.options.year_tolerance.is_none() {
+        if let Some(source_record) = source_record_opt {
+            return calculate_similarity_forced_year(config, record, source_record, input_combined_vector, self_dot, document);
+        } else {
+            return calculate_base_similarity(input_combined_vector, self_dot, document);
+        }
+    }
+    if config.options.force_year && config.options.year_tolerance.is_some() {
+        if let Some(source_record) = source_record_opt {
+            return calculate_similarity_within_year_tolerance(config, record, source_record, input_combined_vector, self_dot, document);
+        } else {
+            return calculate_base_similarity(input_combined_vector, self_dot, document);
+        }
+    }
+    calculate_base_similarity(input_combined_vector, self_dot, document)
+}
+
+// Allow for the following:
+// If record.year is "0", just calculate base similarity
+// If json_schema_version >= 2 and record.allowed_years does not contain source_record.year, return 0.0
+// If json_schema_version < 2 and record.year != source_record.year, return 0.0
+// Otherwise, return base similarity
+fn calculate_similarity_forced_year(config: &Config, record: &JsonRecord, source_record: &SourceRecord, input_combined_vector: &[(u32, f32)], self_dot: f32, document: &DatasetWeightedVector) -> f32 {
+    // If record.year is "0", just calculate base similarity
+    if record.year == "0" {
+        return calculate_base_similarity(input_combined_vector, self_dot, document);
+    }
+    // If json_schema_version >= 2 and record.allowed_years does not contain source_record.year, return 0.0
+    if config.options.json_schema_version >= 2 {
+        if let Ok(source_year) = source_record.year.parse::<u32>() {
+            if !record.allowed_years.contains(&source_year) {
+                return 0.0;
+            }
+        } else {
+            return 0.0; // Source year is not a valid number
+        }
+    } else {
+        // If json_schema_version < 2 and record.year != source_record.year, return 0.0
+        if record.year != source_record.year {
+            return 0.0;
+        }
+    }
+    // Otherwise, return base similarity
+    calculate_base_similarity(input_combined_vector, self_dot, document)
+}
+
+// Allow for the following (only record.year, allowed_years is ignored):
+// If record.year is "0", just calculate base similarity
+// If the absolute difference between record.year and source_record.year is greater than year_tolerance, return 0.0
+// Otherwise, calculate base similarity and apply a penalty based on the year difference
+fn calculate_similarity_within_year_tolerance(config: &Config, record: &JsonRecord, source_record: &SourceRecord, input_combined_vector: &[(u32, f32)], self_dot: f32, document: &DatasetWeightedVector) -> f32 {
+    // If record.year is "0", just calculate base similarity
+    if record.year == "0" {
+        return calculate_base_similarity(input_combined_vector, self_dot, document);
+    }
+    // If year_tolerance is set to a positive integer
+    if let Some(tolerance) = config.options.year_tolerance {
+        if let Ok(record_year) = record.year.parse::<i32>() {
+            if let Ok(source_year) = source_record.year.parse::<i32>() {
+                let year_diff = (record_year - source_year).abs();
+                if year_diff <= tolerance {
+                    let base_similarity = calculate_base_similarity(input_combined_vector, self_dot, document);
+                    // Apply a penalty based on how far the year is from the source year
+                    let penalty = 1.0 - (year_diff as f32 * config.options.year_tolerance_penalty);
+                    return base_similarity * penalty.max(0.0); // Ensure penalty does not go below 0.0
+                } else {
+                    return 0.0;
+                }
+            } else {
+                return 0.0; // Source year is not a valid number
+            }
+        } else {
+            return 0.0; // Record year is not a valid number
+        }
+    }
+    // Fallback to base similarity
+    calculate_base_similarity(input_combined_vector, self_dot, document)
+}
+
+fn calculate_base_similarity(input_combined_vector: &[(u32, f32)], self_dot: f32, document: &DatasetWeightedVector) -> f32 {
+    cosine_similarity(input_combined_vector, self_dot, &document.vector, document.dot)
 }
 
 // If author has a single comma, split it and join in reverse order with a space

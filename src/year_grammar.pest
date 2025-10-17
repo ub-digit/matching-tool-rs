@@ -1,0 +1,11 @@
+yearbase = _{ASCII_DIGIT{4}}
+year = { yearbase }
+start_year = { yearbase }
+end_year = { yearbase }
+year_range = { start_year ~ "-" ~ end_year }
+year_range_open = {start_year}
+open_end_range = _{ year_range_open ~ "-" ~ !year }
+year_term = _{ year_range | open_end_range | year }
+year_list = _{ year_term ~ ("," ~ year_list)* }
+WHITESPACE = _{" "}
+main = _{ SOI ~ year_list ~ &EOI }

@@ -5,6 +5,13 @@ use zip::read::ZipArchive;
 use crate::matcher::JsonRecord;
 use crate::args::Config;
 use serde::{Serialize, Deserialize};
+use pest::Parser;
+use pest_derive::Parser;
+use pest::iterators::Pairs;
+
+#[derive(Parser)]
+#[grammar = "year_grammar.pest"]
+struct YearParser;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct JsonRecordLoader {
@@ -45,7 +52,7 @@ pub struct JsonRecordLoaderV2 {
     pub editions: Vec<JsonEditionLoaderV2>, // Partially used. If there are multiple editions, it is treated as if there are multiple records
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(untagged)]
 pub enum JsonRecordEditionLoaderYearV2 {
     Single(u32),
@@ -56,6 +63,16 @@ pub enum JsonRecordEditionLoaderYearV2 {
 impl Default for JsonRecordEditionLoaderYearV2 {
     fn default() -> Self {
         JsonRecordEditionLoaderYearV2::None
+    }
+}
+
+impl From<&JsonRecordEditionLoaderYearV2> for Vec<u32> {
+    fn from(year_enum: &JsonRecordEditionLoaderYearV2) -> Self {
+        match year_enum {
+            JsonRecordEditionLoaderYearV2::Single(y) => vec![*y],
+            JsonRecordEditionLoaderYearV2::Multiple(ys) => ys.clone(),
+            JsonRecordEditionLoaderYearV2::None => Vec::new(),
+        }
     }
 }
 
@@ -70,14 +87,14 @@ pub struct JsonEditionLoaderV2 {
     #[serde(default)]
     pub year_of_publication: JsonRecordEditionLoaderYearV2, // year in the vectors (only the lowest year value that is not 0 will be used and converted to string, or empty string if all values are 0 or there are no values)
     #[serde(default)]
+    pub year_of_publication_compact_string: Option<String>, // String that may be parsed by the YearParser to get multiple years
+    #[serde(default)]
     pub edition_statement: Option<String>,
     #[serde(default)]
     pub volume_designation: Option<String>,
     #[serde(default)]
     pub serial_titles: Vec<String>,
 }
-
-
 
 pub fn read_zip_file(config: &Config, file_path: &str, schema_version: i32) -> (String, Vec<(String, JsonRecord)>) {
     let inputdata = read_input_to_btreemap(file_path);
@@ -192,6 +209,7 @@ fn convert_to_jsonarray(inputdata: BTreeMap<String, String>) -> (String, Vec<(St
                 location: edition.place_of_publication.clone().unwrap_or_default(),
                 year: edition.year_of_publication.clone().unwrap_or_default().to_string(),
                 publication_type: record.publication_type.clone().unwrap_or_default(),
+                allowed_years: Vec::new(), // Not used in version 1
             };
             jsonarray.push((filename.clone(), jsonrecord));
         }
@@ -204,6 +222,7 @@ fn convert_to_jsonarray(inputdata: BTreeMap<String, String>) -> (String, Vec<(St
                 location: String::new(),
                 year: String::new(),
                 publication_type: record.publication_type.clone().unwrap_or_default(),
+                allowed_years: Vec::new(), // Not used in version 1
             };
             jsonarray.push((filename.clone(), jsonrecord));
         }
@@ -255,7 +274,8 @@ fn convert_to_jsonarray_v2(config: &Config, inputdata: BTreeMap<String, String>)
         };
         let basename = filename.split('/').last().unwrap_or(&filename).to_string();
         for (edition_idx, edition) in record.editions.iter().enumerate() {
-            let lowest_non_zero_year = match &edition.year_of_publication {
+            let edition_years = extract_years(config, edition);
+            let lowest_non_zero_year = match &edition_years {
                 JsonRecordEditionLoaderYearV2::Single(y) => *y,
                 JsonRecordEditionLoaderYearV2::Multiple(ys) => ys.iter().filter(|y| **y > 0).min().cloned().unwrap_or(0),
                 JsonRecordEditionLoaderYearV2::None => 0,
@@ -285,6 +305,7 @@ fn convert_to_jsonarray_v2(config: &Config, inputdata: BTreeMap<String, String>)
                 location: edition.place_of_publication.clone().join(" "),
                 year: year_string,
                 publication_type: publication_type_string.clone(),
+                allowed_years: (&edition_years).into(),
             };
             jsonarray.push((basename.clone(), jsonrecord));
         }
@@ -297,9 +318,78 @@ fn convert_to_jsonarray_v2(config: &Config, inputdata: BTreeMap<String, String>)
                 location: String::new(),
                 year: String::new(),
                 publication_type: publication_type_string.clone(),
+                allowed_years: Vec::new(),
             };
             jsonarray.push((basename, jsonrecord));
         }
     }
     (systemprompt, jsonarray)
+}
+
+fn extract_years(config: &Config, edition: &JsonEditionLoaderV2) -> JsonRecordEditionLoaderYearV2 {
+    if config.options.parse_year_ranges {
+        if let Some(year_string) = &edition.year_of_publication_compact_string {
+            match parse_year_string(year_string) {
+                Ok(years) => {
+                    if config.options.use_first_parsed_year {
+                        if let Some(first_year) = first_year(&years) {
+                            return JsonRecordEditionLoaderYearV2::Single(first_year);
+                        } else {
+                            return JsonRecordEditionLoaderYearV2::None;
+                        }
+                    } else {
+                        return JsonRecordEditionLoaderYearV2::Multiple(years);
+                    }
+                }
+                Err(_) => {
+                    return edition.year_of_publication.clone();
+                }
+            }
+        } else {
+            return edition.year_of_publication.clone();
+        }
+    } else {
+        return edition.year_of_publication.clone();
+    }
+}
+
+// Parse year string using YearParser.
+// It will return a vec of u32 years from strings of style "1949", "1949-", "1949-1951", and comma-separated combinations of these, e.g. "1949, 1951-1954, 1956-"
+// That example will return 1949, 1951, 1952, 1953, 1954, 1956
+fn parse_year_string(year_string: &str) -> Result<Vec<u32>, pest::error::Error<Rule>> {
+    let pairs = YearParser::parse(Rule::main, &year_string)?;
+    let mut years = Vec::new();
+    create_year_array(pairs, &mut years);
+    Ok(years)
+}
+
+fn create_year_array(pairs: Pairs<Rule>, years: &mut Vec<u32>) {
+    for pair in pairs {
+        match pair.as_rule() {
+            Rule::year => {
+                let year_int = pair.as_str().parse::<u32>().unwrap();
+                years.push(year_int);
+            }
+            Rule::year_range => {
+                let mut inner_pairs = pair.into_inner();
+                let start_year = inner_pairs.next().unwrap().as_str().parse::<i32>().unwrap();
+                let end_year = inner_pairs.next().unwrap().as_str().parse::<i32>().unwrap();
+                for year in start_year..=end_year {
+                    years.push(year as u32);
+                }
+            }
+            // Special case, only use start_year as a single year
+            Rule::year_range_open => {
+                let start_year = pair.into_inner().next().unwrap().as_str().parse::<i32>().unwrap();
+                years.push(start_year as u32);
+            }
+            _ => {
+                create_year_array(pair.into_inner(), years);
+            }
+        }
+    }
+}
+
+fn first_year(year_array: &[u32]) -> Option<u32> {
+    year_array.iter().cloned().min()
 }

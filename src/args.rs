@@ -79,6 +79,10 @@ pub struct ConfigOptions {
     pub year_tolerance: Option<i32>,
     // When using year_tolerance, the year difference causes a penalty of year_difference * M (M defaults to 0.25)
     pub year_tolerance_penalty: f32,
+    // Use "year_of_publication_compact_string" field to parse year ranges. This field is only available in JSON schema version 2.
+    pub parse_year_ranges: bool,
+    // When parsing multiple years from "year_of_publication_compact_string", use the first (earliest) year only
+    pub use_first_parsed_year: bool,
     pub include_source_data: bool,
     pub similarity_threshold: Option<f32>,
     pub z_threshold: Option<f32>,
@@ -173,6 +177,8 @@ fn parse_options(args: &Args) -> ConfigOptions {
         force_year: false,
         year_tolerance: None,
         year_tolerance_penalty: DEFAULT_YEAR_TOLERANCE_PENALTY,
+        parse_year_ranges: false,
+        use_first_parsed_year: false,
         include_source_data: false,
         similarity_threshold: None,
         z_threshold: None,
@@ -211,6 +217,8 @@ fn parse_options(args: &Args) -> ConfigOptions {
                 let value = ConfigOptions::f32_option(&option);
                 options.year_tolerance_penalty = value;
             },
+            "parse-year-ranges" => options.parse_year_ranges = true,
+            "use-first-parsed-year" => options.use_first_parsed_year = true,
             "include-source-data" => options.include_source_data = true,
             "similarity-threshold" => {
                 let value = ConfigOptions::f32_option(&option);
