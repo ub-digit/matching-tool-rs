@@ -3,11 +3,12 @@ use std::fs::File;
 use std::io::Read;
 use zip::read::ZipArchive;
 use crate::matcher::{JsonRecord, JsonRecordLoader, JsonRecordLoaderV2};
+use crate::args::Config;
 
-pub fn read_zip_file(file_path: &str, schema_version: i32) -> (String, Vec<(String, JsonRecord)>) {
+pub fn read_zip_file(config: &Config, file_path: &str, schema_version: i32) -> (String, Vec<(String, JsonRecord)>) {
     let zipdata = read_zip_to_btreemap(file_path);
     if schema_version == 2 {
-        return convert_to_jsonarray_v2(zipdata);
+        return convert_to_jsonarray_v2(config, zipdata);
     } else {
         return convert_to_jsonarray(zipdata);
     }
@@ -104,7 +105,7 @@ fn convert_to_jsonarray(zipdata: BTreeMap<String, String>) -> (String, Vec<(Stri
     (systemprompt, jsonarray)
 }
 
-fn convert_to_jsonarray_v2(zipdata: BTreeMap<String, String>) -> (String, Vec<(String, JsonRecord)>) {
+fn convert_to_jsonarray_v2(config: &Config, zipdata: BTreeMap<String, String>) -> (String, Vec<(String, JsonRecord)>) {
     let mut jsonarray = Vec::new();
     let mut systemprompt = String::new();
     for (filename, content) in zipdata {
@@ -149,9 +150,26 @@ fn convert_to_jsonarray_v2(zipdata: BTreeMap<String, String>) -> (String, Vec<(S
         for (edition_idx, edition) in record.editions.iter().enumerate() {
             let lowest_non_zero_year = edition.year_of_publication.iter().filter(|y| **y > 0).min().cloned().unwrap_or(0);
             let year_string = if lowest_non_zero_year > 0 { lowest_non_zero_year.to_string() } else { String::new() };
+            let mut title = record.title.clone().unwrap_or_default();
+            // If option "add_serial_to_title" is set, append "serial_titles" field (array joined with a space) to the title joined with a space
+            if config.options.add_serial_to_title {
+                let serial_titles = edition.serial_titles.join(" ").trim().to_string();
+                if !serial_titles.is_empty() {
+                    title = format!("{} {}", title, serial_titles);
+                }
+            }
+            // If option "add_edition_to_title" is set, append "edition_statement" field (Option<String>) to the title joined with a space
+            if config.options.add_edition_to_title {
+                if let Some(edition_str) = &edition.edition_statement {
+                    if !edition_str.trim().is_empty() {
+                        title = format!("{} {}", title, edition_str);
+                    }
+                }
+            }
+
             let jsonrecord = JsonRecord {
                 edition: edition_idx,
-                title: record.title.clone().unwrap_or_default(),
+                title: title,
                 author: record.author.clone().unwrap_or_default(),
                 location: edition.place_of_publication.clone().join(" "),
                 year: year_string,

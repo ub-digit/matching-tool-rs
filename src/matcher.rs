@@ -80,9 +80,9 @@ pub struct JsonEditionLoaderV2 {
     #[serde(default)]
     pub year_of_publication: Vec<u32>, // year in the vectors (only the lowest year value that is not 0 will be used and converted to string, or empty string if all values are 0 or there are no values)
     #[serde(default)]
-    pub edition: Option<String>,
+    pub edition_statement: Option<String>,
     #[serde(default)]
-    pub volume_enumeration: Option<String>,
+    pub volume_designation: Option<String>,
     #[serde(default)]
     pub serial_titles: Vec<String>,
 }
@@ -678,7 +678,7 @@ fn read_json_zip_file(config: &Config, filename: &str) -> (String, Vec<(String, 
         if config.verbose {
             println!("Reading zip file: {}", filename);
         }
-        return zipfile::read_zip_file(filename, config.options.json_schema_version);
+        return zipfile::read_zip_file(config, filename, config.options.json_schema_version);
     }
     // Only support zip-files.
     panic!("Only zip-files are supported as input for match-json-zip");

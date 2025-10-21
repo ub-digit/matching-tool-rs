@@ -47,8 +47,8 @@ fn get_as_string(value: &serde_json::Value) -> String {
     // If value is a string, return it
     // otherwise return an empty string
     match value {
-        serde_json::Value::Array(array) => array.iter().map(|v| v.as_str().unwrap()).collect::<Vec<&str>>().join(" "),
-        serde_json::Value::String(string) => string.to_string(),
+        serde_json::Value::Array(array) => array.iter().map(|v| v.as_str().unwrap().trim()).collect::<Vec<&str>>().join(" "),
+        serde_json::Value::String(string) => string.trim().to_string(),
         _ => "".to_string(),
     }
 }
@@ -75,10 +75,25 @@ fn handle_response(config: &Config, response: reqwest::blocking::Response, total
             serde_json::Value::Number(year_num) => year_num.to_string(),
             _ => "".to_string(),
         };
+        let mut title = get_as_string(&source["title"]);
+        // If option "add_serial_to_title" is set, append "serial_info" field to the title joined with a space
+        if config.options.add_serial_to_title {
+            let serial_info = get_as_string(&source["serial_info"]);
+            if !serial_info.is_empty() {
+                title = format!("{} {}", title, serial_info);
+            }
+        }
+        // If option "add_edition_to_title" is set, append "edition" field to the title joined with a space
+        if config.options.add_edition_to_title {
+            let edition = get_as_string(&source["edition"]);
+            if !edition.is_empty() {
+                title = format!("{} {}", title, edition);
+            }
+        }
         Record {
             id: source["id"].as_str().unwrap().to_string(),
             source: config.options.output_source_name.clone(),
-            title: get_as_string(&source["title"]),
+            title: title,
             author: get_as_string(&source["author"]),
             location: get_as_string(&source["publisher"]),
             year: year,
