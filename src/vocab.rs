@@ -67,7 +67,7 @@ impl VocabPart {
 }
 
 impl Vocab {
-    pub fn new(source: &str) -> Vocab {
+    pub fn new(config: &Config, source: &str) -> Vocab {
         let mut words_vec = vec![tokenizer::UNKNOWN.to_string()];
         let mut words_map = HashMap::new();
         words_map.insert(tokenizer::UNKNOWN.to_string(), 0);
@@ -77,13 +77,13 @@ impl Vocab {
         vocab_parts.insert("location".to_string(), VocabPart::new(VocabPartType::Ngram));
         vocab_parts.insert("year".to_string(), VocabPart::new(VocabPartType::Year));
         vocab_parts.insert("all".to_string(), VocabPart::new(VocabPartType::Ngram));
-        let total_docs = process_source(source, &mut words_vec, &mut words_map, &mut vocab_parts);
+        let total_docs = process_source(config, source, &mut words_vec, &mut words_map, &mut vocab_parts);
         // Loop through the vocab_parts hashmap to calculate the idf for each part
         for (_, vocab_part) in vocab_parts.iter_mut() {
             vocab_part.idf = calculate_idf(words_vec.len(), total_docs, &vocab_part.tokens);
         }
         Vocab {
-            source: source.to_string(),
+            source: config.options.output_source_name.clone(),
             total_docs,
             words: words_vec,
             vocab_parts,
@@ -114,7 +114,7 @@ impl Vocab {
 pub fn build_vocab(config: &Config) {
     let source = &config.source;
     let output_filename = &config.vocab_file;
-    let vocab = Vocab::new(source);
+    let vocab = Vocab::new(config, source);
     vocab.print_vocab_stats();
     vocab.save(output_filename);
 }
@@ -138,9 +138,9 @@ fn calculate_single_idf(total_docs: TotalDocs, doc_count: DocCount) -> f64 {
     idf.log10()
 }
 
-fn process_source(source: &str, words_vec: &mut Vec<String>, words_map: &mut HashMap<String, usize>, vocab_parts: &mut HashMap<String, VocabPart>) -> TotalDocs {
+fn process_source(config: &Config, source: &str, words_vec: &mut Vec<String>, words_map: &mut HashMap<String, usize>, vocab_parts: &mut HashMap<String, VocabPart>) -> TotalDocs {
     let mut counter = 0;
-    let mut records = elastic::fetch_source(source, Pagination::Initial, 0);
+    let mut records = elastic::fetch_source(config, source, Pagination::Initial, 0);
     loop {
         if let Ok((_, Pagination::Done, _)) = records {
             break;
@@ -148,7 +148,7 @@ fn process_source(source: &str, words_vec: &mut Vec<String>, words_map: &mut Has
         if let Ok((new_records, new_pagination, total_count)) = records {
             counter += new_records.len() as u32;
             if counter % 10000 == 0 {
-                println!("Processing {} records from {}", counter, source);
+                println!("Processing {} records from {}", counter, config.options.output_source_name);
                 // if counter >= 100000 {
                 //     return counter;
                 // }
@@ -156,10 +156,10 @@ fn process_source(source: &str, words_vec: &mut Vec<String>, words_map: &mut Has
             for record in new_records {
                 process_record(&record, words_vec, words_map, vocab_parts);
             }
-            records = elastic::fetch_source(source, new_pagination, total_count);
+            records = elastic::fetch_source(config, source, new_pagination, total_count);
         }
     }
-    println!("Processed {} records in {}", counter, source);
+    println!("Processed {} records in {}", counter, config.options.output_source_name);
     counter
 }
 

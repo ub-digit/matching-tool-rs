@@ -86,6 +86,8 @@ pub struct ConfigOptions {
     pub jaro_winkler_adjustment: bool,
     // JSON schema version, version 2 is explicit, all others are version 1
     pub json_schema_version: i32,
+    // Output source name (overriding the source parameter which is used for loading from the index). Only used when building vocab, vectors and source data.
+    pub output_source_name: String,
     // List of files containing IDs (one per line) to exclude from matching
     pub exclude_files: Vec<String>,
     // List of IDs to exclude from matching, populated from exclude_files
@@ -169,6 +171,7 @@ fn parse_options(args: &Args) -> ConfigOptions {
         overlap_adjustment: None,
         jaro_winkler_adjustment: false,
         json_schema_version: 1,
+        output_source_name: args.source.clone().unwrap_or_default(),
         exclude_files: vec![],
         excluded_ids: vec![],
         input_exclude_files: vec![],
@@ -217,6 +220,10 @@ fn parse_options(args: &Args) -> ConfigOptions {
                 let value = ConfigOptions::i32_option(&option);
                 options.json_schema_version = value;
             },
+            "output-source-name" => {
+                let value = ConfigOptions::string_option(&option);
+                options.output_source_name = value;
+            },
             "exclude-file" => { // Repeatable option
                 let value = ConfigOptions::string_option(&option);
                 options.exclude_files.push(value);
@@ -256,7 +263,7 @@ fn parse_command_build_vocab(args: &Args, options: ConfigOptions) -> Config {
         std::process::exit(1);
     }
     let source = args.source.clone().unwrap();
-    let vocab_file = args.vocab_file.clone().unwrap_or(format!("data/{}-vocab.bin", source));
+    let vocab_file = vocab_file_name(args, &options);
     let verbose = args.verbose;
     let config = Config {
         cmd: Cmd::BuildVocab,
@@ -280,9 +287,9 @@ fn parse_command_build_dataset_vectors(args: &Args, options: ConfigOptions) -> C
         std::process::exit(1);
     }
     let source = args.source.clone().unwrap();
-    let vocab_file = args.vocab_file.clone().unwrap_or(format!("data/{}-vocab.bin", source));
-    let dataset_vector_file = args.dataset_vector_file.clone().unwrap_or(format!("data/{}-dataset-vectors.bin", source));
-    let source_data_file = args.source_data_file.clone().unwrap_or(format!("data/{}-source-data.bin", source));
+    let vocab_file = vocab_file_name(args, &options);
+    let dataset_vector_file = dataset_vector_file_name(args, &options);
+    let source_data_file = source_data_file_name(args, &options);
     let verbose = args.verbose;
     let config = Config {
         cmd: Cmd::BuildDatasetVectors,
@@ -315,9 +322,9 @@ fn parse_command_match_json_zip(args: &Args, options: ConfigOptions) -> Config {
     }
     let source = args.source.clone().unwrap();
     let input = args.input.clone().unwrap();
-    let vocab_file = args.vocab_file.clone().unwrap_or(format!("data/{}-vocab.bin", source));
-    let dataset_vector_file = args.dataset_vector_file.clone().unwrap_or(format!("data/{}-dataset-vectors.bin", source));
-    let source_data_file = args.source_data_file.clone().unwrap_or(format!("data/{}-source-data.bin", source));
+    let vocab_file = vocab_file_name(args, &options);
+    let dataset_vector_file = dataset_vector_file_name(args, &options);
+    let source_data_file = source_data_file_name(args, &options);
     let output = match &args.output {
         Some(filename) => Output::File(filename.clone()),
         None => Output::Stdout,
@@ -349,7 +356,7 @@ fn parse_command_build_source_data(args: &Args, options: ConfigOptions) -> Confi
         std::process::exit(1);
     }
     let source = args.source.clone().unwrap();
-    let source_data_file = args.source_data_file.clone().unwrap_or(format!("data/{}-source-data.bin", source));
+    let source_data_file = source_data_file_name(args, &options);
     let verbose = args.verbose;
     let config = Config {
         cmd: Cmd::BuildSourceData,
@@ -369,19 +376,19 @@ fn parse_command_build_source_data(args: &Args, options: ConfigOptions) -> Confi
 
 // If config.source_data_file is equal to the default value, add "source-data-file" to default_args
 fn add_default_source_data_file(config: &mut Config) {
-    if config.source_data_file == format!("data/{}-source-data.bin", config.source) {
+    if config.source_data_file == format!("data/{}-source-data.bin", config.options.output_source_name) {
         config.default_args.insert("source-data-file".to_string(), true);
     }
 }
 
 fn add_default_vocab_file(config: &mut Config) {
-    if config.vocab_file == format!("data/{}-vocab.bin", config.source) {
+    if config.vocab_file == format!("data/{}-vocab.bin", config.options.output_source_name) {
         config.default_args.insert("vocab-file".to_string(), true);
     }
 }
 
 fn add_default_dataset_vector_file(config: &mut Config) {
-    if config.dataset_vector_file == format!("data/{}-dataset-vectors.bin", config.source) {
+    if config.dataset_vector_file == format!("data/{}-dataset-vectors.bin", config.options.output_source_name) {
         config.default_args.insert("dataset-vector-file".to_string(), true);
     }
 }
@@ -427,4 +434,20 @@ fn populate_excluded_input_ids(options: &mut ConfigOptions) {
         excluded_ids.append(&mut ids);
     }
     options.input_excluded_ids = excluded_ids;
+}
+
+    // let vocab_file = args.vocab_file.clone().unwrap_or(format!("data/{}-vocab.bin", source));
+    // let dataset_vector_file = args.dataset_vector_file.clone().unwrap_or(format!("data/{}-dataset-vectors.bin", source));
+    // let source_data_file = args.source_data_file.clone().unwrap_or(format!("data/{}-source-data.bin", source));
+
+fn vocab_file_name(args: &Args, options: &ConfigOptions) -> String {
+    args.vocab_file.clone().unwrap_or(format!("data/{}-vocab.bin", options.output_source_name))
+}
+
+fn dataset_vector_file_name(args: &Args, options: &ConfigOptions) -> String {
+    args.dataset_vector_file.clone().unwrap_or(format!("data/{}-dataset-vectors.bin", options.output_source_name))
+}
+
+fn source_data_file_name(args: &Args, options: &ConfigOptions) -> String {
+    args.source_data_file.clone().unwrap_or(format!("data/{}-source-data.bin", options.output_source_name))
 }

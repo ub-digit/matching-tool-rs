@@ -1,6 +1,7 @@
 use crate::vocab::Vocab;
 use crate::elastic::{self, Pagination, Record};
 use crate::tokenizer;
+use crate::args::Config;
 use std::collections::HashMap;
 use serde::{Serialize, Deserialize};
 
@@ -12,9 +13,9 @@ pub struct Vectors {
 }
 
 impl Vectors {
-    pub fn new(source: &str, total_docs: u32) -> Vectors {
+    pub fn new(config: &Config, total_docs: u32) -> Vectors {
         Vectors {
-            source: source.to_string(),
+            source: config.options.output_source_name.clone(),
             total_docs,
             documents: vec![],
         }
@@ -40,19 +41,19 @@ pub struct Document {
     pub vectors: HashMap<String, Vec<(VectorIndex, f32)>>,
 }
 
-pub fn build_dataset_vectors(config: &crate::args::Config) {
+pub fn build_dataset_vectors(config: &Config) {
     let vocab = Vocab::load(&config.vocab_file);
     if config.verbose {
         println!("Loaded vocab from {}", config.vocab_file);
     }
-    let vectors = process_source(&config.source, &vocab);
+    let vectors = process_source(config, &config.source, &vocab);
     vectors.save(&config.dataset_vector_file);
 }
 
-fn process_source(source: &str, vocab: &Vocab) -> Vectors {
-    let mut vectors = Vectors::new(source, 0);
+fn process_source(config: &Config, source: &str, vocab: &Vocab) -> Vectors {
+    let mut vectors = Vectors::new(config, 0);
     let mut counter = 0;
-    let mut records = elastic::fetch_source(source, Pagination::Initial, 0);
+    let mut records = elastic::fetch_source(config, source, Pagination::Initial, 0);
     loop {
         if let Ok((_, Pagination::Done, _)) = records {
             break;
@@ -60,7 +61,7 @@ fn process_source(source: &str, vocab: &Vocab) -> Vectors {
         if let Ok((new_records, new_pagination, total_count)) = records {
             counter += new_records.len() as u32;
             if counter % 10000 == 0 {
-                println!("Processing {} records from {}", counter, source);
+                println!("Processing {} records from {}", counter, config.options.output_source_name);
                 // if counter >= 100000 {
                 //     return counter;
                 // }
@@ -77,10 +78,10 @@ fn process_source(source: &str, vocab: &Vocab) -> Vectors {
                 // println!("Document: {:?}", doc);
                 // std::process::exit(1);
             }
-            records = elastic::fetch_source(source, new_pagination, total_count);
+            records = elastic::fetch_source(config, source, new_pagination, total_count);
         }
     }
-    println!("Processed {} records in {}", counter, source);
+    println!("Processed {} records in {}", counter, config.options.output_source_name);
     vectors.total_docs = counter;
     vectors
 }

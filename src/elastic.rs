@@ -2,6 +2,7 @@
 
 use reqwest::blocking::Client;
 use serde_json::json;
+use crate::args::Config;
 
 const ELASTIC_URL: &str = "http://localhost:9200";
 const INDEX_NAME: &str = "records";
@@ -33,10 +34,10 @@ impl Record {
 
 // Fetch all documents from the index where source:<source_name>
 // Use the scroll API to fetch all documents in pages
-pub fn fetch_source(source_name: &str, pagination: Pagination, total_count: u32) -> Result<(Vec<Record>, Pagination, u32), reqwest::Error> {
+pub fn fetch_source(config: &Config, source_name: &str, pagination: Pagination, total_count: u32) -> Result<(Vec<Record>, Pagination, u32), reqwest::Error> {
     match pagination {
-        Pagination::Initial => fetch_initial(source_name),
-        Pagination::Scroll(scroll_id) => fetch_scroll(&scroll_id, total_count),
+        Pagination::Initial => fetch_initial(config, source_name),
+        Pagination::Scroll(scroll_id) => fetch_scroll(config, &scroll_id, total_count),
         Pagination::Done => Ok((vec![], Pagination::Done, total_count)),
     }
 }
@@ -53,7 +54,7 @@ fn get_as_string(value: &serde_json::Value) -> String {
 }
 
 // Break out everything after the response since it is the same for both fetch_scroll and fetch_initial
-fn handle_response(response: reqwest::blocking::Response, total_count: u32) -> Result<(Vec<Record>, Pagination, u32), reqwest::Error> {
+fn handle_response(config: &Config, response: reqwest::blocking::Response, total_count: u32) -> Result<(Vec<Record>, Pagination, u32), reqwest::Error> {
     let response_json: serde_json::Value = response.json()?;
     let scroll_id = response_json["_scroll_id"].as_str().unwrap();
     let hits = response_json["hits"]["hits"].as_array().unwrap();
@@ -76,7 +77,7 @@ fn handle_response(response: reqwest::blocking::Response, total_count: u32) -> R
         };
         Record {
             id: source["id"].as_str().unwrap().to_string(),
-            source: source["source"].as_str().unwrap().to_string(),
+            source: config.options.output_source_name.clone(),
             title: get_as_string(&source["title"]),
             author: get_as_string(&source["author"]),
             location: get_as_string(&source["publisher"]),
@@ -87,7 +88,7 @@ fn handle_response(response: reqwest::blocking::Response, total_count: u32) -> R
     Ok((records, Pagination::Scroll(scroll_id.to_string()), total_count + hits.len() as u32))
 }
 
-fn fetch_scroll(scroll_id: &str, total_count: u32) -> Result<(Vec<Record>, Pagination, u32), reqwest::Error> {
+fn fetch_scroll(config: &Config, scroll_id: &str, total_count: u32) -> Result<(Vec<Record>, Pagination, u32), reqwest::Error> {
     let url = format!("{}/_search/scroll", ELASTIC_URL);
     let client = Client::new();
     let body = json!({
@@ -99,10 +100,10 @@ fn fetch_scroll(scroll_id: &str, total_count: u32) -> Result<(Vec<Record>, Pagin
         .json(&body)
         .send()?;
 
-    handle_response(response, total_count)
+    handle_response(config, response, total_count)
  }
 
-fn fetch_initial(source_name: &str) -> Result<(Vec<Record>, Pagination, u32), reqwest::Error> {
+fn fetch_initial(config: &Config, source_name: &str) -> Result<(Vec<Record>, Pagination, u32), reqwest::Error> {
     let url = format!("{}/{}/_search?scroll=1m", ELASTIC_URL, INDEX_NAME);
     let client = Client::new();
 
@@ -122,5 +123,5 @@ fn fetch_initial(source_name: &str) -> Result<(Vec<Record>, Pagination, u32), re
         .json(&body)
         .send()?;
 
-    handle_response(response, 0)
+    handle_response(config, response, 0)
 }

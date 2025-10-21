@@ -33,14 +33,14 @@ impl SourceData {
     }}
 
 pub fn build_source_data(config: &Config) {
-    let source_data = process_source(&config.source);
+    let source_data = process_source(config, &config.source);
     source_data.save(&config.source_data_file);
 }
 
-fn process_source(source: &str) -> SourceData {
+fn process_source(config: &Config, source: &str) -> SourceData {
     let mut counter = 0;
     let mut source_records = FxHashMap::default();
-    let mut records = elastic::fetch_source(source, Pagination::Initial, 0);
+    let mut records = elastic::fetch_source(config, source, Pagination::Initial, 0);
     loop {
         if let Ok((_, Pagination::Done, _)) = records {
             break;
@@ -48,7 +48,7 @@ fn process_source(source: &str) -> SourceData {
         if let Ok((new_records, new_pagination, total_count)) = records {
             counter += new_records.len() as u32;
             if counter % 10000 == 0 {
-                println!("Processing {} records from {}", counter, source);
+                println!("Processing {} records from {}", counter, config.options.output_source_name);
                 // if counter >= 100000 {
                 //     return counter;
                 // }
@@ -63,12 +63,12 @@ fn process_source(source: &str) -> SourceData {
                 };
                 source_records.insert(record.id, source_record);
             }
-            records = elastic::fetch_source(source, new_pagination, total_count);
+            records = elastic::fetch_source(config, source, new_pagination, total_count);
         }
     }
-    println!("Processed {} records in {}", counter, source);
+    println!("Processed {} records in {}", counter, config.options.output_source_name);
     SourceData {
-        source: source.to_string(),
+        source: config.options.output_source_name.clone(),
         records: source_records,
     }
 }
