@@ -6,12 +6,29 @@ use crate::matcher::{JsonRecord, JsonRecordLoader, JsonRecordLoaderV2};
 use crate::args::Config;
 
 pub fn read_zip_file(config: &Config, file_path: &str, schema_version: i32) -> (String, Vec<(String, JsonRecord)>) {
-    let zipdata = read_zip_to_btreemap(file_path);
+    let inputdata = read_input_to_btreemap(file_path);
     if schema_version == 2 {
-        return convert_to_jsonarray_v2(config, zipdata);
+        return convert_to_jsonarray_v2(config, inputdata);
     } else {
-        return convert_to_jsonarray(zipdata);
+        return convert_to_jsonarray(inputdata);
     }
+}
+
+fn read_input_to_btreemap(path: &str) -> BTreeMap<String, String> {
+    if is_directory(path) {
+        read_directory_to_btreemap(path)
+    } else {
+        read_zip_to_btreemap(path)
+    }
+}
+
+// Check path and determine if it is a file or a directory
+fn is_directory(path: &str) -> bool {
+    let metadata = std::fs::metadata(path);
+    if let Ok(meta) = metadata {
+        return meta.is_dir();
+    }
+    false
 }
 
 fn read_zip_to_btreemap(file_path: &str) -> BTreeMap<String, String> {
@@ -39,12 +56,27 @@ fn read_zip_to_btreemap(file_path: &str) -> BTreeMap<String, String> {
     file_contents_map
 }
 
+// Read all files (no subdirectories) from a directory into a BTreeMap
+fn read_directory_to_btreemap(dir_path: &str) -> BTreeMap<String, String> {
+    let mut file_contents_map = BTreeMap::new();
+    let entries = std::fs::read_dir(dir_path).expect("Failed to read directory");
+    for entry in entries {
+        let entry = entry.expect("Failed to get directory entry");
+        let path = entry.path();
+        if path.is_file() {
+            let filename = path.file_name().unwrap().to_string_lossy().to_string();
+            let content = std::fs::read_to_string(&path).expect("Failed to read file");
+            file_contents_map.insert(filename, content);
+        }
+    }
+    file_contents_map
+}
 
 // Return (systemprompt, Vec<JsonRecord>)
-fn convert_to_jsonarray(zipdata: BTreeMap<String, String>) -> (String, Vec<(String, JsonRecord)>) {
+fn convert_to_jsonarray(inputdata: BTreeMap<String, String>) -> (String, Vec<(String, JsonRecord)>) {
     let mut jsonarray = Vec::new();
     let mut systemprompt = String::new();
-    for (filename, content) in zipdata {
+    for (filename, content) in inputdata {
         // First check if the file is the system prompt (a file with the extension .prompt)
         if filename.ends_with(".prompt") {
             systemprompt = content;
@@ -105,10 +137,10 @@ fn convert_to_jsonarray(zipdata: BTreeMap<String, String>) -> (String, Vec<(Stri
     (systemprompt, jsonarray)
 }
 
-fn convert_to_jsonarray_v2(config: &Config, zipdata: BTreeMap<String, String>) -> (String, Vec<(String, JsonRecord)>) {
+fn convert_to_jsonarray_v2(config: &Config, inputdata: BTreeMap<String, String>) -> (String, Vec<(String, JsonRecord)>) {
     let mut jsonarray = Vec::new();
     let mut systemprompt = String::new();
-    for (filename, content) in zipdata {
+    for (filename, content) in inputdata {
         // First check if the file is the system prompt (a file with the extension .prompt)
         if filename.ends_with(".prompt") {
             systemprompt = content;
