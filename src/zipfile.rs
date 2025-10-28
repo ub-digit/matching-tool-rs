@@ -23,7 +23,7 @@ fn read_input_to_btreemap(path: &str) -> BTreeMap<String, String> {
 }
 
 // Check path and determine if it is a file or a directory
-fn is_directory(path: &str) -> bool {
+pub fn is_directory(path: &str) -> bool {
     let metadata = std::fs::metadata(path);
     if let Ok(meta) = metadata {
         return meta.is_dir();

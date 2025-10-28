@@ -680,7 +680,14 @@ fn read_json_zip_file(config: &Config, filename: &str) -> (String, Vec<(String, 
         }
         return zipfile::read_zip_file(config, filename, config.options.json_schema_version);
     }
-    // Only support zip-files.
+    if zipfile::is_directory(filename) {
+        // Secretly allow directories as well.
+        if config.verbose {
+            println!("Reading directory: {}", filename);
+        }
+        return zipfile::read_zip_file(config, filename, config.options.json_schema_version);
+    }
+    // Officially only support zip-files.
     panic!("Only zip-files are supported as input for match-json-zip");
 }
 
