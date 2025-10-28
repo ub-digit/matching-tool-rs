@@ -495,7 +495,7 @@ fn load_options_from_file(filename: &str, options: &mut ConfigOptions) {
     let file_options: ConfigFileLoader = 
         match serde_json::from_reader(reader) {
             Ok(opts) => opts,
-            Err(e) => { return; }
+            Err(_e) => { return; }
         };
     // Overwrite options with those from the file if there is a matching_config section with an options field
     if let Some(matching_config) = file_options.matching_config {
