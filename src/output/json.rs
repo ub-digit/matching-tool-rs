@@ -158,9 +158,9 @@ fn build_normal_row(config: &Config, record: &OutputRecord, rows: &mut Vec<JsonR
 }
 
 fn build_extended_row(config: &Config, record: &OutputRecord, rows: &mut Vec<JsonRow>) {
-    // record.card is of style "box/card.json" (e.g. "003/00153.json")
-    // This gives: box="003", card="00153", json="003/00153.json" (record.card)
-    let parts: Vec<&str> = record.card.split('/').collect();
+    // record.card is of style "box/card.json" (e.g. "003_00153.json")
+    // This gives: box="003", card="00153", json="003_00153.json" (record.card)
+    let parts: Vec<&str> = record.card.split('_').collect();
     let box_name = parts.get(0).unwrap_or(&"").to_string();
     let card_name = parts.get(1).unwrap_or(&"").replace(".json", "");
     let json_name = record.card.clone();

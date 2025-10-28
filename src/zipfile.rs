@@ -147,6 +147,7 @@ fn convert_to_jsonarray_v2(config: &Config, zipdata: BTreeMap<String, String>) -
             (false, Some(pt)) => pt.to_string(),
             (false, None) => "".to_string(),
         };
+        let basename = filename.split('/').last().unwrap_or(&filename).to_string();
         for (edition_idx, edition) in record.editions.iter().enumerate() {
             let lowest_non_zero_year = edition.year_of_publication.iter().filter(|y| **y > 0).min().cloned().unwrap_or(0);
             let year_string = if lowest_non_zero_year > 0 { lowest_non_zero_year.to_string() } else { String::new() };
@@ -175,7 +176,7 @@ fn convert_to_jsonarray_v2(config: &Config, zipdata: BTreeMap<String, String>) -
                 year: year_string,
                 publication_type: publication_type_string.clone(),
             };
-            jsonarray.push((filename.clone(), jsonrecord));
+            jsonarray.push((basename.clone(), jsonrecord));
         }
         // Special handling for case where there are no editions. Here we set the edition to 9999999
         if record.editions.is_empty() {
@@ -187,7 +188,7 @@ fn convert_to_jsonarray_v2(config: &Config, zipdata: BTreeMap<String, String>) -
                 year: String::new(),
                 publication_type: publication_type_string.clone(),
             };
-            jsonarray.push((filename.clone(), jsonrecord));
+            jsonarray.push((basename, jsonrecord));
         }
     }
     (systemprompt, jsonarray)
