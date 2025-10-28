@@ -4,6 +4,9 @@ use crate::output::Output;
 use std::fmt::{self, Display, Formatter};
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
+use serde_json;
+use std::fs::File;
+use std::io::BufReader;
 
 #[derive(Parser)]
 struct Args {
@@ -44,6 +47,9 @@ struct Args {
     /// For example, '--option force-year' for 'match-single-json' command (-O force-year)
     #[clap(short = 'O', long = "option")]
     options: Vec<String>,
+    /// Load options and weights from a JSON file
+    #[clap(short = 'C', long = "config-file")]
+    config_file: Option<String>,
 }   
 
 #[allow(dead_code)]
@@ -59,6 +65,7 @@ pub struct Config {
     pub output_format: OutputFormat,
     pub verbose: bool,
     pub options: ConfigOptions,
+    pub config_file: Option<String>,
     // Only relevant to reduce command output in report, empty in all other cases.
     pub default_args: FxHashMap<String, bool>,
 }
@@ -181,6 +188,12 @@ fn parse_options(args: &Args) -> ConfigOptions {
         input_exclude_files: vec![],
         input_excluded_ids: vec![],
     };
+
+    if let Some(config_file) = &args.config_file {
+        // Load options from JSON file
+        load_options_from_file(config_file, &mut options);
+    }
+
     for option in args.options.clone() {
         match ConfigOptions::option_name(&option) {
             "force-year" => options.force_year = true,
@@ -282,6 +295,7 @@ fn parse_command_build_vocab(args: &Args, options: ConfigOptions) -> Config {
         output_format: OutputFormat::Text,
         verbose,
         options,
+        config_file: args.config_file.clone(),
         default_args: FxHashMap::default(),
     };
     config
@@ -308,6 +322,7 @@ fn parse_command_build_dataset_vectors(args: &Args, options: ConfigOptions) -> C
         output_format: OutputFormat::Text,
         verbose,
         options,
+        config_file: args.config_file.clone(),
         default_args: FxHashMap::default(),
     };
     config
@@ -348,6 +363,7 @@ fn parse_command_match_json_zip(args: &Args, options: ConfigOptions) -> Config {
         output_format,
         verbose,
         options,
+        config_file: args.config_file.clone(),
         default_args: FxHashMap::default(),
     };
     add_default_source_data_file(&mut config);
@@ -375,6 +391,7 @@ fn parse_command_build_source_data(args: &Args, options: ConfigOptions) -> Confi
         output_format: OutputFormat::Text,
         verbose,
         options,
+        config_file: args.config_file.clone(),
         default_args: FxHashMap::default(),
     };
     config
@@ -456,4 +473,111 @@ fn dataset_vector_file_name(args: &Args, options: &ConfigOptions) -> String {
 
 fn source_data_file_name(args: &Args, options: &ConfigOptions) -> String {
     args.source_data_file.clone().unwrap_or(format!("data/{}-source-data.bin", options.output_source_name))
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct ConfigFileLoader {
+    matching_config: Option<ConfigMatchingConfigLoader>,
+}
+#[derive(Debug, Serialize, Deserialize)]
+struct ConfigMatchingConfigLoader {
+    // Just a simple serde Value
+    weights: Option<serde_json::Value>,
+    options: Option<serde_json::Value>,
+}
+
+fn load_options_from_file(filename: &str, options: &mut ConfigOptions) {
+    let file = File::open(filename).unwrap_or_else(|e| {
+        eprintln!("Failed to open config file {}: {}", filename, e);
+        std::process::exit(1);
+    });
+    let reader = BufReader::new(file);
+    let file_options: ConfigFileLoader = 
+        match serde_json::from_reader(reader) {
+            Ok(opts) => opts,
+            Err(e) => { return; }
+        };
+    // Overwrite options with those from the file if there is a matching_config section with an options field
+    if let Some(matching_config) = file_options.matching_config {
+        if let Some(file_opts) = matching_config.options {
+            fill_options(options, file_opts);
+        }
+        // If there is a weights field, write it to a tempfile and set options.weights_file to that filename
+        if let Some(weights) = matching_config.weights {
+            let temp_dir = std::env::temp_dir();
+            let random_number = rand::random::<u32>();
+            let weights_file_path = temp_dir.join(format!("matching_weights_temp-{}.json", random_number));
+            let weights_file = File::create(&weights_file_path).unwrap_or_else(|e| {
+                eprintln!("Failed to create temporary weights file: {}", e);
+                std::process::exit(1);
+            });
+            serde_json::to_writer_pretty(weights_file, &weights).unwrap_or_else(|e| {
+                eprintln!("Failed to write weights to temporary file: {}", e);
+                std::process::exit(1);
+            });
+            options.weights_file = Some(weights_file_path.to_str().unwrap().to_string());
+        }
+    }
+}
+
+fn fill_bool(option: &mut bool, option_value: &serde_json::Value) {
+    *option = option_value.as_bool().unwrap_or(false)
+}
+
+fn fill_optional_i32(option: &mut Option<i32>, option_value: &serde_json::Value) {
+    if option_value.is_null() {
+        *option = None
+    } else {
+        *option = Some(option_value.as_i64().unwrap() as i32)
+    }
+}
+
+fn fill_optional_f32(option: &mut Option<f32>, option_value: &serde_json::Value) {
+    if option_value.is_null() {
+        *option = None
+    } else {
+        *option = Some(option_value.as_f64().unwrap() as f32)
+    }
+}
+
+fn fill_i32(option: &mut i32, option_value: &serde_json::Value) {
+    *option = option_value.as_i64().unwrap_or(0) as i32
+}
+
+fn fill_f32(option: &mut f32, option_value: &serde_json::Value) {
+    *option = option_value.as_f64().unwrap_or(0.0) as f32
+}
+
+fn fill_string(option: &mut String, option_value: &serde_json::Value) {
+    *option = option_value.as_str().unwrap_or("").to_string()
+}
+
+fn fill_option(option_name: &str, option_value: &serde_json::Value, options: &mut ConfigOptions) {
+    match option_name {
+        "force_year" => fill_bool(&mut options.force_year, option_value),
+        "year_tolerance" => fill_optional_i32(&mut options.year_tolerance, option_value),
+        "year_tolerance_penalty" => fill_f32(&mut options.year_tolerance_penalty, option_value),
+        "include_source_data" => fill_bool(&mut options.include_source_data, option_value),
+        "similarity_threshold" => fill_optional_f32(&mut options.similarity_threshold, option_value),
+        "z_threshold" => fill_optional_f32(&mut options.z_threshold, option_value),
+        "min_single_similarity" => fill_optional_f32(&mut options.min_single_similarity, option_value),
+        "min_multiple_similarity" => fill_optional_f32(&mut options.min_multiple_similarity, option_value),
+        "extended_output" => fill_bool(&mut options.extended_output, option_value),
+        "add_author_to_title" => fill_bool(&mut options.add_author_to_title, option_value),
+        "add_serial_to_title" => fill_bool(&mut options.add_serial_to_title, option_value),
+        "add_edition_to_title" => fill_bool(&mut options.add_edition_to_title, option_value),
+        "overlap_adjustment" => fill_optional_i32(&mut options.overlap_adjustment, option_value),
+        "jaro_winkler_adjustment" => fill_bool(&mut options.jaro_winkler_adjustment, option_value),
+        "json_schema_version" => fill_i32(&mut options.json_schema_version, option_value),
+        "output_source_name" => fill_string(&mut options.output_source_name, option_value),
+        _ => {},
+    }
+}
+
+fn fill_options(options: &mut ConfigOptions, file_opts: serde_json::Value) {
+    if let serde_json::Value::Object(map) = file_opts {
+        for (key, value) in map {
+            fill_option(&key, &value, options);
+        }
+    }
 }
