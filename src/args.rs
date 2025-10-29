@@ -577,6 +577,7 @@ fn fill_option(option_name: &str, option_value: &serde_json::Value, options: &mu
         "jaro_winkler_adjustment" => fill_bool(&mut options.jaro_winkler_adjustment, option_value),
         "json_schema_version" => fill_i32(&mut options.json_schema_version, option_value),
         "output_source_name" => fill_string(&mut options.output_source_name, option_value),
+        "dataset_dir" => fill_string(&mut options.dataset_dir, option_value),
         _ => {},
     }
 }
