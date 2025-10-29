@@ -97,6 +97,8 @@ pub struct ConfigOptions {
     pub json_schema_version: i32,
     // Output source name (overriding the source parameter which is used for loading from the index). Only used when building vocab, vectors and source data.
     pub output_source_name: String,
+    // Base directory for vocab/dataset-vectors/source-data, defaults to "data"
+    pub dataset_dir: String,
     // List of files containing IDs (one per line) to exclude from matching
     pub exclude_files: Vec<String>,
     // List of IDs to exclude from matching, populated from exclude_files
@@ -183,6 +185,7 @@ fn parse_options(args: &Args) -> ConfigOptions {
         jaro_winkler_adjustment: false,
         json_schema_version: 1,
         output_source_name: args.source.clone().unwrap_or_default(),
+        dataset_dir: "data".to_string(),
         exclude_files: vec![],
         excluded_ids: vec![],
         input_exclude_files: vec![],
@@ -242,6 +245,10 @@ fn parse_options(args: &Args) -> ConfigOptions {
             "output-source-name" => {
                 let value = ConfigOptions::string_option(&option);
                 options.output_source_name = value;
+            },
+            "dataset-dir" => {
+                let value = ConfigOptions::string_option(&option);
+                options.dataset_dir = value;
             },
             "exclude-file" => { // Repeatable option
                 let value = ConfigOptions::string_option(&option);
@@ -399,19 +406,19 @@ fn parse_command_build_source_data(args: &Args, options: ConfigOptions) -> Confi
 
 // If config.source_data_file is equal to the default value, add "source-data-file" to default_args
 fn add_default_source_data_file(config: &mut Config) {
-    if config.source_data_file == format!("data/{}-source-data.bin", config.options.output_source_name) {
+    if config.source_data_file == format!("{}/{}-source-data.bin", config.options.dataset_dir, config.options.output_source_name) {
         config.default_args.insert("source-data-file".to_string(), true);
     }
 }
 
 fn add_default_vocab_file(config: &mut Config) {
-    if config.vocab_file == format!("data/{}-vocab.bin", config.options.output_source_name) {
+    if config.vocab_file == format!("{}/{}-vocab.bin", config.options.dataset_dir, config.options.output_source_name) {
         config.default_args.insert("vocab-file".to_string(), true);
     }
 }
 
 fn add_default_dataset_vector_file(config: &mut Config) {
-    if config.dataset_vector_file == format!("data/{}-dataset-vectors.bin", config.options.output_source_name) {
+    if config.dataset_vector_file == format!("{}/{}-dataset-vectors.bin", config.options.dataset_dir, config.options.output_source_name) {
         config.default_args.insert("dataset-vector-file".to_string(), true);
     }
 }
@@ -464,15 +471,15 @@ fn populate_excluded_input_ids(options: &mut ConfigOptions) {
     // let source_data_file = args.source_data_file.clone().unwrap_or(format!("data/{}-source-data.bin", source));
 
 fn vocab_file_name(args: &Args, options: &ConfigOptions) -> String {
-    args.vocab_file.clone().unwrap_or(format!("data/{}-vocab.bin", options.output_source_name))
+    args.vocab_file.clone().unwrap_or(format!("{}/{}-vocab.bin", options.dataset_dir, options.output_source_name))
 }
 
 fn dataset_vector_file_name(args: &Args, options: &ConfigOptions) -> String {
-    args.dataset_vector_file.clone().unwrap_or(format!("data/{}-dataset-vectors.bin", options.output_source_name))
+    args.dataset_vector_file.clone().unwrap_or(format!("{}/{}-dataset-vectors.bin", options.dataset_dir, options.output_source_name))
 }
 
 fn source_data_file_name(args: &Args, options: &ConfigOptions) -> String {
-    args.source_data_file.clone().unwrap_or(format!("data/{}-source-data.bin", options.output_source_name))
+    args.source_data_file.clone().unwrap_or(format!("{}/{}-source-data.bin", options.dataset_dir, options.output_source_name))
 }
 
 #[derive(Debug, Serialize, Deserialize)]
