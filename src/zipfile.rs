@@ -2,8 +2,82 @@ use std::collections::BTreeMap;
 use std::fs::File;
 use std::io::Read;
 use zip::read::ZipArchive;
-use crate::matcher::{JsonRecord, JsonRecordLoader, JsonRecordLoaderV2, JsonRecordEditionLoaderYearV2};
+use crate::matcher::JsonRecord;
 use crate::args::Config;
+use serde::{Serialize, Deserialize};
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct JsonRecordLoader {
+    #[serde(default)]
+    pub title: Option<String>, // title in the vectors
+    #[serde(default)]
+    pub author: Option<String>, // author in the vectors
+    #[serde(default)]
+    pub publication_type: Option<String>, // not used for matching
+    pub editions: Vec<JsonEditionLoader>, // Partially used. If there are multiple editions, it is treated as if there are multiple records
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct JsonEditionLoader {
+    #[serde(default)]
+    pub part: Option<String>, // not used for matching
+    #[serde(default)]
+    pub format: Option<String>, // not used for matching
+    #[serde(rename = "placeOfPublication", default)]
+    pub place_of_publication: Option<String>, // location in the vectors
+    #[serde(rename = "yearOfPublication", default)]
+    pub year_of_publication: Option<u32>, // year in the vectors
+}
+
+// Same structure as JsonRecordLoader, but used for version 2 of the JSON input format
+#[derive(Debug, Serialize, Deserialize)]
+pub struct JsonRecordLoaderV2 {
+    #[serde(default)]
+    pub schema_version: Option<u32>,
+    #[serde(default)]
+    pub title: Option<String>, // title in the vectors
+    #[serde(default)]
+    pub author: Option<String>, // author in the vectors
+    #[serde(default)]
+    pub publication_type: Option<String>, // not used for matching
+    #[serde(default)]
+    pub is_reference_card: bool, // not used for matching
+    pub editions: Vec<JsonEditionLoaderV2>, // Partially used. If there are multiple editions, it is treated as if there are multiple records
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum JsonRecordEditionLoaderYearV2 {
+    Single(u32),
+    Multiple(Vec<u32>),
+    None,
+}
+
+impl Default for JsonRecordEditionLoaderYearV2 {
+    fn default() -> Self {
+        JsonRecordEditionLoaderYearV2::None
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct JsonEditionLoaderV2 {
+    #[serde(default)]
+    pub part: Option<String>, // not used for matching
+    #[serde(default)]
+    pub format: Option<String>, // not used for matching
+    #[serde(default)]
+    pub place_of_publication: Vec<String>, // location in the vectors, will be joined with " "
+    #[serde(default)]
+    pub year_of_publication: JsonRecordEditionLoaderYearV2, // year in the vectors (only the lowest year value that is not 0 will be used and converted to string, or empty string if all values are 0 or there are no values)
+    #[serde(default)]
+    pub edition_statement: Option<String>,
+    #[serde(default)]
+    pub volume_designation: Option<String>,
+    #[serde(default)]
+    pub serial_titles: Vec<String>,
+}
+
+
 
 pub fn read_zip_file(config: &Config, file_path: &str, schema_version: i32) -> (String, Vec<(String, JsonRecord)>) {
     let inputdata = read_input_to_btreemap(file_path);
