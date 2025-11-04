@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 use std::fs::File;
 use std::io::Read;
 use zip::read::ZipArchive;
-use crate::matcher::{JsonRecord, JsonRecordLoader, JsonRecordLoaderV2};
+use crate::matcher::{JsonRecord, JsonRecordLoader, JsonRecordLoaderV2, JsonRecordEditionLoaderYearV2};
 use crate::args::Config;
 
 pub fn read_zip_file(config: &Config, file_path: &str, schema_version: i32) -> (String, Vec<(String, JsonRecord)>) {
@@ -181,7 +181,11 @@ fn convert_to_jsonarray_v2(config: &Config, inputdata: BTreeMap<String, String>)
         };
         let basename = filename.split('/').last().unwrap_or(&filename).to_string();
         for (edition_idx, edition) in record.editions.iter().enumerate() {
-            let lowest_non_zero_year = edition.year_of_publication.iter().filter(|y| **y > 0).min().cloned().unwrap_or(0);
+            let lowest_non_zero_year = match &edition.year_of_publication {
+                JsonRecordEditionLoaderYearV2::Single(y) => *y,
+                JsonRecordEditionLoaderYearV2::Multiple(ys) => ys.iter().filter(|y| **y > 0).min().cloned().unwrap_or(0),
+                JsonRecordEditionLoaderYearV2::None => 0,
+            };
             let year_string = if lowest_non_zero_year > 0 { lowest_non_zero_year.to_string() } else { String::new() };
             let mut title = record.title.clone().unwrap_or_default();
             // If option "add_serial_to_title" is set, append "serial_titles" field (array joined with a space) to the title joined with a space

@@ -70,6 +70,20 @@ pub struct JsonRecordLoaderV2 {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum JsonRecordEditionLoaderYearV2 {
+    Single(u32),
+    Multiple(Vec<u32>),
+    None,
+}
+
+impl Default for JsonRecordEditionLoaderYearV2 {
+    fn default() -> Self {
+        JsonRecordEditionLoaderYearV2::None
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 pub struct JsonEditionLoaderV2 {
     #[serde(default)]
     pub part: Option<String>, // not used for matching
@@ -78,7 +92,7 @@ pub struct JsonEditionLoaderV2 {
     #[serde(default)]
     pub place_of_publication: Vec<String>, // location in the vectors, will be joined with " "
     #[serde(default)]
-    pub year_of_publication: Vec<u32>, // year in the vectors (only the lowest year value that is not 0 will be used and converted to string, or empty string if all values are 0 or there are no values)
+    pub year_of_publication: JsonRecordEditionLoaderYearV2, // year in the vectors (only the lowest year value that is not 0 will be used and converted to string, or empty string if all values are 0 or there are no values)
     #[serde(default)]
     pub edition_statement: Option<String>,
     #[serde(default)]
