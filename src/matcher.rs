@@ -79,6 +79,7 @@ pub struct MatchCandidate {
     pub overlap_score: f32,
     pub adjusted_overlap_score: f32,
     pub jaro_winkler_score: f32,
+    pub jaro_winkler_author_score: f32,
 }
 
 impl MatchCandidate {
@@ -438,15 +439,27 @@ fn apply_overlap_score(config: &Config, top_n: &mut Vec<MatchCandidate>, input_r
 }
 
 fn apply_jaro_winkler(config: &Config, top_n: &mut Vec<MatchCandidate>, input_record: &JsonRecord, source_data_records: &FxHashMap<String, SourceRecord>) {
-    if !config.options.jaro_winkler_adjustment {
+    if !config.options.jaro_winkler_adjustment && !config.options.jaro_winkler_author_adjustment {
         return; // No Jaro-Winkler adjustment configured, so return
     }
-    // Calculate the Jaro-Winkler score for each top_n item
-    for candidate in top_n.iter_mut() {
-        if let Some(source_record) = source_data_records.get(&candidate.id) {
-            let jw_score = jaro_winkler::jaro_winkler(&source_record.title.to_lowercase(), &input_record.title.to_lowercase());
-            candidate.jaro_winkler_score = jw_score as f32;
-            candidate.similarity *= jw_score as f32; // Adjust similarity by Jaro-Winkler score
+    if config.options.jaro_winkler_adjustment {
+        // Calculate the Jaro-Winkler score for each top_n item
+        for candidate in top_n.iter_mut() {
+            if let Some(source_record) = source_data_records.get(&candidate.id) {
+                let jw_score = jaro_winkler::jaro_winkler(&source_record.title.to_lowercase(), &input_record.title.to_lowercase());
+                candidate.jaro_winkler_score = jw_score as f32;
+                candidate.similarity *= jw_score as f32; // Adjust similarity by Jaro-Winkler score
+            }
+        }
+    }
+    if config.options.jaro_winkler_author_adjustment {
+        // Calculate the Jaro-Winkler score for each top_n item for author
+        for candidate in top_n.iter_mut() {
+            if let Some(source_record) = source_data_records.get(&candidate.id) {
+                let jw_score = jaro_winkler::jaro_winkler(&source_record.author.to_lowercase(), &input_record.author.to_lowercase());
+                candidate.jaro_winkler_author_score = jw_score as f32;
+                candidate.similarity *= jw_score as f32; // Adjust similarity by Jaro-Winkler score
+            }
         }
     }
 }

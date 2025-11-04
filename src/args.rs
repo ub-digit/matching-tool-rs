@@ -93,6 +93,8 @@ pub struct ConfigOptions {
     pub overlap_adjustment: Option<i32>,
     // Jaro-Winkler adjustment, multiplier to similarity for Jaro-Winkler similarity between titles
     pub jaro_winkler_adjustment: bool,
+    // Jaro-Winkler author adjustment, multiplier to similarity for Jaro-Winkler similarity between authors
+    pub jaro_winkler_author_adjustment: bool,
     // JSON schema version, version 2 is explicit, all others are version 1
     pub json_schema_version: i32,
     // Output source name (overriding the source parameter which is used for loading from the index). Only used when building vocab, vectors and source data.
@@ -183,6 +185,7 @@ fn parse_options(args: &Args) -> ConfigOptions {
         add_edition_to_title: false,
         overlap_adjustment: None,
         jaro_winkler_adjustment: false,
+        jaro_winkler_author_adjustment: false,
         json_schema_version: 1,
         output_source_name: args.source.clone().unwrap_or_default(),
         dataset_dir: "data".to_string(),
@@ -575,6 +578,7 @@ fn fill_option(option_name: &str, option_value: &serde_json::Value, options: &mu
         "add_edition_to_title" => fill_bool(&mut options.add_edition_to_title, option_value),
         "overlap_adjustment" => fill_optional_i32(&mut options.overlap_adjustment, option_value),
         "jaro_winkler_adjustment" => fill_bool(&mut options.jaro_winkler_adjustment, option_value),
+        "jaro_winkler_author_adjustment" => fill_bool(&mut options.jaro_winkler_author_adjustment, option_value),
         "json_schema_version" => fill_i32(&mut options.json_schema_version, option_value),
         "output_source_name" => fill_string(&mut options.output_source_name, option_value),
         "dataset_dir" => fill_string(&mut options.dataset_dir, option_value),
