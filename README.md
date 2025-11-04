@@ -104,6 +104,7 @@ The tool will load the vector data and pre-process that data at the beginning of
 * `-O add-author-to-title` - add the author to the title field in the vector calculation (can improve matching in some cases), simulates a "245c" field, which is now included in the libris-v1_5 weights.
 * `-O overlap-adjustment=10` - adjust the score based on large string overlaps (any positive integer, but small values are usually not very useful). This will reduce the similarity score for matches with that lack large overlaps, making matches with similar titles more likely to be singled out as good matches. It also adds the relevance for the order of words in the title. A value of 10 is usually a good starting point.
 * `-O jaro-winkler-adjustment` - adjust the score based on Jaro-Winkler similarity of the titles (can improve matching for order of words in titles).
+* `-O jaro-winkler-author-adjustment` - adjust the score based on Jaro-Winkler similarity of the authors (can improve matching for order of words in authors).
 * `-O json-schema-version=2` - specify the JSON schema version of the input data (default is 1, version 2 is a newer format with some changes).
 * `-O dataset-dir=path-to-data-directory` - specify the directory where the dataset files are located (default is `data`).
 * `-O exclude-file=file1 -O exclude-file=file2` - exclude IDs listed in the specified file (one ID per line). Can be used multiple times to exclude multiple files. Useful for doing a second run excluding IDs that were matched in a first run.
