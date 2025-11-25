@@ -48,6 +48,7 @@ pub enum MatchStat {
     Unqualified, // Single not reaching min_single_similarity
     NoEdition, // No edition in the JSON record
     Excluded, // Excluded by id
+    InvalidJSON,
     NA,
 }
 
@@ -61,6 +62,7 @@ impl MatchStat {
             MatchStat::Unqualified => "Unqualified",
             MatchStat::NoEdition => "No edition",
             MatchStat::Excluded => "Excluded",
+            MatchStat::InvalidJSON => "Invalid JSON",
             MatchStat::NA => "",
         }
     }
@@ -119,6 +121,9 @@ impl OutputRecord {
         if let MatchStat::NoEdition = stats {
             new_record.edition = 0;
         }
+        if let MatchStat::InvalidJSON = stats {
+            new_record.edition = 0;
+        }
 
         OutputRecord {
             card: card.to_string(),
@@ -141,6 +146,11 @@ impl MatchStatistics {
     pub fn update(&mut self, stat: &MatchStat, card: &str) {
         // If stat is NoEdition, we don't update any statistics other than the cards
         if let MatchStat::NoEdition = stat {
+            self.cards.insert(card.to_string(), true);
+            return;
+        }
+        // If stat is InvalidJSON, we don't update any statistics other than the cards
+        if let MatchStat::InvalidJSON = stat {
             self.cards.insert(card.to_string(), true);
             return;
         }
@@ -230,12 +240,20 @@ pub fn match_json_zip(config: &Config) {
             output_records.push(OutputRecord::new(config, &card, &record, &vec![], MatchStat::Excluded, &source_data_records));
             continue;
         }
-        if record.edition > 100000 {
+        if record.edition == 9999999 {
             if config.verbose {
                 println!("No edition");
             }
             statistics.update(&MatchStat::NoEdition, &card);
             output_records.push(OutputRecord::new(config, &card, &record, &vec![], MatchStat::NoEdition, &source_data_records));
+            continue;
+        }
+        if record.edition == 9999998 {
+            if config.verbose {
+                println!("Invalid JSON");
+            }
+            statistics.update(&MatchStat::InvalidJSON, &card);
+            output_records.push(OutputRecord::new(config, &card, &record, &vec![], MatchStat::InvalidJSON, &source_data_records));
             continue;
         }
         let top = process_record(&config, &record, &vocab, &dataset_weighted_vectors, &weights, &source_data_records);

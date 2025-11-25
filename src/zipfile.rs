@@ -50,6 +50,8 @@ pub struct JsonRecordLoaderV2 {
     #[serde(default)]
     pub is_reference_card: bool, // not used for matching
     pub editions: Vec<JsonEditionLoaderV2>, // Partially used. If there are multiple editions, it is treated as if there are multiple records
+    #[serde(default)]
+    pub invalid_json: bool, // if true, this record is invalid and should be skipped
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -260,10 +262,16 @@ fn convert_to_jsonarray_v2(config: &Config, inputdata: BTreeMap<String, String>)
                     if json_array.len() == 1 {
                         json_array.pop().unwrap() // At this point we know there is exactly one record
                     } else {
-                        panic!("Expected one record in JSON array, found {}", json_array.len());
+                        if config.verbose {
+                            println!("Expected one record in JSON array, found {}", json_array.len());
+                        }
+                        create_invalid_json_loader_record_v2()
                     }
                 } else {
-                    panic!("Failed to parse JSON file {}: {}", filename, e);
+                    if config.verbose {
+                        println!("Failed to parse JSON file {}: {}", filename, e);
+                    }
+                    create_invalid_json_loader_record_v2()
                 }
             }
         };
@@ -310,7 +318,7 @@ fn convert_to_jsonarray_v2(config: &Config, inputdata: BTreeMap<String, String>)
             jsonarray.push((basename.clone(), jsonrecord));
         }
         // Special handling for case where there are no editions. Here we set the edition to 9999999
-        if record.editions.is_empty() {
+        if record.editions.is_empty() && !record.invalid_json {
             let jsonrecord = JsonRecord {
                 edition: 9999999,
                 title: record.title.clone().unwrap_or_default(),
@@ -320,10 +328,34 @@ fn convert_to_jsonarray_v2(config: &Config, inputdata: BTreeMap<String, String>)
                 publication_type: publication_type_string.clone(),
                 allowed_years: Vec::new(),
             };
-            jsonarray.push((basename, jsonrecord));
+            jsonarray.push((basename.clone(), jsonrecord));
         }
+        if record.invalid_json {
+            let jsonrecord = JsonRecord {
+                edition: 9999998,
+                title: record.title.clone().unwrap_or_default(),
+                author: record.author.clone().unwrap_or_default(),
+                location: String::new(),
+                year: String::new(),
+                publication_type: publication_type_string.clone(),
+                allowed_years: Vec::new(),
+            };
+            jsonarray.push((basename.clone(), jsonrecord));
+        }            
     }
     (systemprompt, jsonarray)
+}
+
+fn create_invalid_json_loader_record_v2() -> JsonRecordLoaderV2 {
+    JsonRecordLoaderV2 {
+        schema_version: None,
+        title: Some("INVALID JSON".to_string()),
+        author: Some("INVALID JSON".to_string()),
+        publication_type: Some("INVALID JSON".to_string()),
+        is_reference_card: false,
+        editions: Vec::new(),
+        invalid_json: true,
+    }
 }
 
 fn extract_years(config: &Config, edition: &JsonEditionLoaderV2) -> JsonRecordEditionLoaderYearV2 {
