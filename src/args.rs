@@ -576,6 +576,8 @@ fn fill_option(option_name: &str, option_value: &serde_json::Value, options: &mu
         "force_year" => fill_bool(&mut options.force_year, option_value),
         "year_tolerance" => fill_optional_i32(&mut options.year_tolerance, option_value),
         "year_tolerance_penalty" => fill_f32(&mut options.year_tolerance_penalty, option_value),
+        "parse_year_ranges" => fill_bool(&mut options.parse_year_ranges, option_value),
+        "use_first_parsed_year" => fill_bool(&mut options.use_first_parsed_year, option_value),
         "include_source_data" => fill_bool(&mut options.include_source_data, option_value),
         "similarity_threshold" => fill_optional_f32(&mut options.similarity_threshold, option_value),
         "z_threshold" => fill_optional_f32(&mut options.z_threshold, option_value),
