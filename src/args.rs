@@ -241,6 +241,7 @@ fn parse_options(args: &Args) -> ConfigOptions {
                 options.overlap_adjustment = Some(value);
             },
             "jaro-winkler-adjustment" => options.jaro_winkler_adjustment = true,
+            "jaro-winkler-author-adjustment" => options.jaro_winkler_author_adjustment = true,
             "json-schema-version" => {
                 let value = ConfigOptions::i32_option(&option);
                 options.json_schema_version = value;
