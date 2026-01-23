@@ -11,11 +11,11 @@ use std::io::BufReader;
 #[derive(Parser)]
 struct Args {
     /// Command to run: Available commands: 
-    /// 'build-vocab', 'build-dataset-vectors', 'match-json-zip', 'build-source-data' (Default: 'match-json-zip')
+    /// 'build-vocab', 'build-dataset-vectors', 'match-json-zip', 'build-source-data', 'dump-source-data' (Default: 'match-json-zip')
     #[clap(short = 'c', long = "command")]
     command: Option<String>,
     /// Source name, required with: 
-    /// 'build-vocab', 'build-dataset-vectors', 'match-json-zip', 'build-source-data'
+    /// 'build-vocab', 'build-dataset-vectors', 'match-json-zip', 'build-source-data', 'dump-source-data'
     #[clap(short = 's', long = "source")]
     source: Option<String>,
     /// File to save the vocab to with 'build-vocab' command, later for loading the vocab as well
@@ -288,6 +288,7 @@ fn parse_command(args: &Args, options: ConfigOptions) -> Config {
         "build-dataset-vectors" => parse_command_build_dataset_vectors(args, options),
         "match-json-zip" => parse_command_match_json_zip(args, options),
         "build-source-data" => parse_command_build_source_data(args, options),
+        "dump-source-data" => parse_command_dump_source_data(args, options),
         _ => {
             eprintln!("Unknown command: {}", command);
             std::process::exit(1);
@@ -408,6 +409,35 @@ fn parse_command_build_source_data(args: &Args, options: ConfigOptions) -> Confi
         input: "".to_string(),
         output: Output::Stdout,
         output_format: OutputFormat::Text,
+        verbose,
+        options,
+        config_file: args.config_file.clone(),
+        default_args: FxHashMap::default(),
+    };
+    config
+}
+
+fn parse_command_dump_source_data(args: &Args, options: ConfigOptions) -> Config {
+    if args.source.is_none() {
+        eprintln!("Source name is required for dump-source-data command");
+        std::process::exit(1);
+    }
+    let source = args.source.clone().unwrap();
+    let source_data_file = source_data_file_name(args, &options);
+    let output = match &args.output {
+        Some(filename) => Output::File(filename.clone()),
+        None => Output::Stdout,
+    };
+    let verbose = args.verbose;
+    let config = Config {
+        cmd: Cmd::DumpSourceData,
+        source,
+        vocab_file: "".to_string(),
+        dataset_vector_file: "".to_string(),
+        source_data_file,
+        input: "".to_string(),
+        output,
+        output_format: OutputFormat::Json,
         verbose,
         options,
         config_file: args.config_file.clone(),

@@ -1,4 +1,5 @@
 use crate::args::Config;
+use crate::output::Output;
 use crate::elastic::{self, Pagination};
 // use std::collections::HashMap;
 use rustc_hash::FxHashMap;
@@ -70,5 +71,20 @@ fn process_source(config: &Config, source: &str) -> SourceData {
     SourceData {
         source: config.options.output_source_name.clone(),
         records: source_records,
+    }
+}
+
+// Dump source data in JSON format to output file
+// Output is only allowed to be JSON format for now
+pub fn dump_source_data(config: &Config) {
+    let source_data = SourceData::load(&config.source_data_file);
+    let json_output = serde_json::to_string_pretty(&source_data).unwrap();
+    if let Output::File(path) = &config.output {
+        if config.verbose {
+            println!("Dumping source data to file: {}", path);
+        }
+        std::fs::write(path, json_output).unwrap();
+    } else {
+        println!("No file specified for output. Skipping dump.");
     }
 }

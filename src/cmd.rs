@@ -11,6 +11,7 @@ pub enum Cmd {
     BuildDatasetVectors,
     MatchJsonZip,
     BuildSourceData,
+    DumpSourceData,
 }
 
 impl Cmd {
@@ -20,6 +21,7 @@ impl Cmd {
             Cmd::BuildDatasetVectors => vectorize::build_dataset_vectors(config),
             Cmd::MatchJsonZip => matcher::match_json_zip(config),
             Cmd::BuildSourceData => source_data::build_source_data(config),
+            Cmd::DumpSourceData => source_data::dump_source_data(config),
         }
     }
 }
@@ -31,6 +33,7 @@ impl Display for Cmd {
             Cmd::BuildDatasetVectors => write!(f, "build-dataset-vectors"),
             Cmd::MatchJsonZip => write!(f, "match-json-zip"),
             Cmd::BuildSourceData => write!(f, "build-source-data"),
+            Cmd::DumpSourceData => write!(f, "dump-source-data"),
         }
     }
 }
