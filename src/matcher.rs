@@ -507,6 +507,17 @@ fn apply_overlap_score(config: &Config, top_n: &mut Vec<MatchCandidate>, input_r
     }
 }
 
+fn truncate_string_to_unicode_boundary(s: &str, max_len: usize) -> String {
+    if s.len() <= max_len {
+        return s.to_string();
+    }
+    let mut end = max_len;
+    while !s.is_char_boundary(end) {
+        end -= 1;
+    }
+    s[..end].to_string()
+}
+
 fn apply_jaro_winkler(config: &Config, top_n: &mut Vec<MatchCandidate>, input_record: &JsonRecord, source_data_records: &FxHashMap<String, SourceRecord>) {
     if !config.options.jaro_winkler_adjustment && !config.options.jaro_winkler_author_adjustment {
         return; // No Jaro-Winkler adjustment configured, so return
@@ -519,11 +530,7 @@ fn apply_jaro_winkler(config: &Config, top_n: &mut Vec<MatchCandidate>, input_re
                     if let JaroTruncate::Title | JaroTruncate::Both = config.options.jaro_winkler_truncate {
                         // Truncate input record title to length of source record title
                         let source_len = source_record.title.len();
-                        if input_record.title.len() > source_len {
-                            input_record.title[..source_len].to_lowercase()
-                        } else {
-                            input_record.title.to_lowercase()
-                        }
+                        truncate_string_to_unicode_boundary(&input_record.title, source_len).to_lowercase()
                     } else {
                         input_record.title.to_lowercase()
                     };
@@ -544,11 +551,7 @@ fn apply_jaro_winkler(config: &Config, top_n: &mut Vec<MatchCandidate>, input_re
                     if let JaroTruncate::Author | JaroTruncate::Both = config.options.jaro_winkler_truncate {
                         // Truncate input record author to length of source record author
                         let source_len = source_record.author.len();
-                        if input_record.author.len() > source_len {
-                            input_record.author[..source_len].to_lowercase()
-                        } else {
-                            input_record.author.to_lowercase()
-                        }
+                        truncate_string_to_unicode_boundary(&input_record.author, source_len).to_lowercase()
                     } else {
                         input_record.author.to_lowercase()
                     };
