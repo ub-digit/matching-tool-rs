@@ -1,4 +1,4 @@
-use crate::args::Config;
+use crate::args::{Config, JaroTruncate};
 use crate::vocab::Vocab;
 use crate::vectorize::{self, Vectors, Document};
 use crate::elastic::Record as ElasticRecord;
@@ -515,7 +515,19 @@ fn apply_jaro_winkler(config: &Config, top_n: &mut Vec<MatchCandidate>, input_re
         // Calculate the Jaro-Winkler score for each top_n item
         for candidate in top_n.iter_mut() {
             if let Some(source_record) = source_data_records.get(&candidate.id) {
-                let jw_score = jaro_winkler::jaro_winkler(&source_record.title.to_lowercase(), &input_record.title.to_lowercase());
+                let input_record_title = 
+                    if let JaroTruncate::Title | JaroTruncate::Both = config.options.jaro_winkler_truncate {
+                        // Truncate input record title to length of source record title
+                        let source_len = source_record.title.len();
+                        if input_record.title.len() > source_len {
+                            input_record.title[..source_len].to_lowercase()
+                        } else {
+                            input_record.title.to_lowercase()
+                        }
+                    } else {
+                        input_record.title.to_lowercase()
+                    };
+                let jw_score = jaro_winkler::jaro_winkler(&source_record.title.to_lowercase(), &input_record_title);
                 candidate.jaro_winkler_score = jw_score as f32;
                 candidate.similarity *= jw_score as f32; // Adjust similarity by Jaro-Winkler score
             }
@@ -528,7 +540,19 @@ fn apply_jaro_winkler(config: &Config, top_n: &mut Vec<MatchCandidate>, input_re
                 if source_record.author.is_empty() || input_record.author.is_empty() {
                     continue; // Skip if either author is empty
                 }
-                let jw_score = jaro_winkler::jaro_winkler(&source_record.author.to_lowercase(), &input_record.author.to_lowercase());
+                let input_record_author = 
+                    if let JaroTruncate::Author | JaroTruncate::Both = config.options.jaro_winkler_truncate {
+                        // Truncate input record author to length of source record author
+                        let source_len = source_record.author.len();
+                        if input_record.author.len() > source_len {
+                            input_record.author[..source_len].to_lowercase()
+                        } else {
+                            input_record.author.to_lowercase()
+                        }
+                    } else {
+                        input_record.author.to_lowercase()
+                    };
+                let jw_score = jaro_winkler::jaro_winkler(&source_record.author.to_lowercase(), &input_record_author);
                 candidate.jaro_winkler_author_score = jw_score as f32;
                 candidate.similarity *= jw_score as f32; // Adjust similarity by Jaro-Winkler score
             }

@@ -72,6 +72,35 @@ pub struct Config {
 
 pub const DEFAULT_YEAR_TOLERANCE_PENALTY: f32 = 0.25;
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub enum JaroTruncate {
+    Title,
+    Author,
+    Both,
+    None,
+}
+
+impl Display for JaroTruncate {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        match self {
+            JaroTruncate::Title => write!(f, "title"),
+            JaroTruncate::Author => write!(f, "author"),
+            JaroTruncate::Both => write!(f, "both"),
+            JaroTruncate::None => write!(f, "none"),
+        }
+    }
+}
+
+// Implement conversion from JaroTruncate to Option<String>
+impl From<JaroTruncate> for Option<String> {
+    fn from(jt: JaroTruncate) -> Self {
+        match jt {
+            JaroTruncate::None => None,
+            _ => Some(jt.to_string()),
+        }
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ConfigOptions {
     pub force_year: bool,
@@ -99,6 +128,8 @@ pub struct ConfigOptions {
     pub jaro_winkler_adjustment: bool,
     // Jaro-Winkler author adjustment, multiplier to similarity for Jaro-Winkler similarity between authors
     pub jaro_winkler_author_adjustment: bool,
+    // Jaro-Winkler truncate length to dataset source for title,author or all (both)
+    pub jaro_winkler_truncate: JaroTruncate,
     // JSON schema version, version 2 is explicit, all others are version 1
     pub json_schema_version: i32,
     // Output source name (overriding the source parameter which is used for loading from the index). Only used when building vocab, vectors and source data.
@@ -130,6 +161,16 @@ impl ConfigOptions {
         
     fn option_name(s: &str) -> &str {
         s.split('=').collect::<Vec<&str>>()[0]
+    }
+
+    // Special for JaroTruncate
+    fn jaro_truncate_option(s: &str) -> JaroTruncate {
+        match s.split('=').collect::<Vec<&str>>()[1] {
+            "title" => JaroTruncate::Title,
+            "author" => JaroTruncate::Author,
+            "both" => JaroTruncate::Both,
+            _ => JaroTruncate::None,
+        }
     }
 }
 
@@ -192,6 +233,7 @@ fn parse_options(args: &Args) -> ConfigOptions {
         overlap_adjustment: None,
         jaro_winkler_adjustment: false,
         jaro_winkler_author_adjustment: false,
+        jaro_winkler_truncate: JaroTruncate::None,
         json_schema_version: 1,
         output_source_name: args.source.clone().unwrap_or_default(),
         dataset_dir: "data".to_string(),
@@ -250,6 +292,9 @@ fn parse_options(args: &Args) -> ConfigOptions {
             },
             "jaro-winkler-adjustment" => options.jaro_winkler_adjustment = true,
             "jaro-winkler-author-adjustment" => options.jaro_winkler_author_adjustment = true,
+            "jaro-winkler-truncate" => {
+                options.jaro_winkler_truncate = ConfigOptions::jaro_truncate_option(&option);
+            },
             "json-schema-version" => {
                 let value = ConfigOptions::i32_option(&option);
                 options.json_schema_version = value;
@@ -601,6 +646,20 @@ fn fill_string(option: &mut String, option_value: &serde_json::Value) {
     *option = option_value.as_str().unwrap_or("").to_string()
 }
 
+fn fill_jaro_truncate(option: &mut JaroTruncate, option_value: &serde_json::Value) {
+    if let Some(value) = option_value.as_str() {
+        match value {
+            "title" => *option = JaroTruncate::Title,
+            "author" => *option = JaroTruncate::Author,
+            "both" => *option = JaroTruncate::Both,
+            "none" => *option = JaroTruncate::None,
+            _ => *option = JaroTruncate::None,
+        }
+    } else {
+        *option = JaroTruncate::None
+    }
+}
+
 fn fill_option(option_name: &str, option_value: &serde_json::Value, options: &mut ConfigOptions) {
     match option_name {
         "force_year" => fill_bool(&mut options.force_year, option_value),
@@ -620,6 +679,7 @@ fn fill_option(option_name: &str, option_value: &serde_json::Value, options: &mu
         "overlap_adjustment" => fill_optional_i32(&mut options.overlap_adjustment, option_value),
         "jaro_winkler_adjustment" => fill_bool(&mut options.jaro_winkler_adjustment, option_value),
         "jaro_winkler_author_adjustment" => fill_bool(&mut options.jaro_winkler_author_adjustment, option_value),
+        "jaro_winkler_truncate" => fill_jaro_truncate(&mut options.jaro_winkler_truncate, option_value),
         "json_schema_version" => fill_i32(&mut options.json_schema_version, option_value),
         "output_source_name" => fill_string(&mut options.output_source_name, option_value),
         "dataset_dir" => fill_string(&mut options.dataset_dir, option_value),
