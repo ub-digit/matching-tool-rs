@@ -20,6 +20,7 @@ enum JsonRow {
     Normal(JsonRowNormal),
     Empty(JsonRowEmpty),
     Extended(JsonRowExtended),
+    EmptyExtended(JsonRowEmptyExtended),
 }
 
 #[derive(Debug, Serialize)]
@@ -89,6 +90,24 @@ struct JsonRowExtended {
     overlap_score: f64,
     adjusted_overlap_score: f64,
     jaro_winkler_score: f64,
+}
+
+#[derive(Debug, Serialize)]
+struct JsonRowEmptyExtended {
+    #[serde(rename = "box")]
+    box_name: String,
+    card: String,
+    #[serde(rename = "card_ID")]
+    card_id: String,
+    #[serde(rename = "match_object_ID")]
+    match_object_id: String,
+    card_type: String,
+    edition_idx: u32,
+    title: String,
+    author: String,
+    location: String,
+    year: String,
+    match_stat: String,
 }
 
 pub fn output_records(config: &Config, path: &str, records: &[OutputRecord]) {
@@ -169,8 +188,12 @@ fn build_extended_row(config: &Config, record: &OutputRecord, rows: &mut Vec<Jso
     let card_type = translate_publication_type(&record.record.publication_type);
     if record.top.len() == 0 {
         // Special case when there are no matches (top is empty), we write a single row with the record data and No match, and nothing else
-        rows.push(JsonRow::Empty(JsonRowEmpty {
-            card: card_name,
+        rows.push(JsonRow::EmptyExtended(JsonRowEmptyExtended {
+            box_name: box_name.clone(),
+            card: card_name.clone(),
+            card_id: card_id.clone(),
+            match_object_id: match_object_id.clone(),
+            card_type: card_type.clone(),
             edition_idx: record.record.edition as u32,
             title: record.record.title.clone(),
             author: record.record.author.clone(),
