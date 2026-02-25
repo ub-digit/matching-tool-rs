@@ -158,6 +158,10 @@ fn read_directory_to_btreemap(dir_path: &str) -> BTreeMap<String, String> {
         let path = entry.path();
         if path.is_file() {
             let filename = path.file_name().unwrap().to_string_lossy().to_string();
+            // Only parse .json and .prompt files
+            if !filename.ends_with(".json") && !filename.ends_with(".prompt") {
+                continue;
+            }
             let content = std::fs::read_to_string(&path).expect("Failed to read file");
             file_contents_map.insert(filename, content);
         }
