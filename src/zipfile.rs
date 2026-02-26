@@ -78,6 +78,40 @@ impl From<&JsonRecordEditionLoaderYearV2> for Vec<u32> {
     }
 }
 
+// "place_of_publication": [
+//                 {
+//                     "place_name": "Stockholm",
+//                     "country_name": "Sweden",
+//                     "country_code": "SE"
+//                 }
+//             ],
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct JsonEditionPlaceLoaderV2 {
+    #[serde(default)]
+    pub place_name: Option<String>,
+    #[serde(default)]
+    pub country_name: Option<String>,
+    #[serde(default)]
+    pub country_code: Option<String>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum JsonEditionPlaceLoaderValueV2 {
+    String(String),
+    Object(JsonEditionPlaceLoaderV2),
+}
+
+impl ToString for JsonEditionPlaceLoaderValueV2 {
+    fn to_string(&self) -> String {
+        match self {
+            JsonEditionPlaceLoaderValueV2::String(s) => s.clone(),
+            JsonEditionPlaceLoaderValueV2::Object(o) => o.place_name.clone().unwrap_or_default(),
+        }
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct JsonEditionLoaderV2 {
     #[serde(default)]
@@ -85,7 +119,7 @@ pub struct JsonEditionLoaderV2 {
     #[serde(default)]
     pub format: Option<String>, // not used for matching
     #[serde(default)]
-    pub place_of_publication: Vec<String>, // location in the vectors, will be joined with " "
+    pub place_of_publication: Vec<JsonEditionPlaceLoaderValueV2>, // location in the vectors, will be joined with " "
     #[serde(default)]
     pub year_of_publication: JsonRecordEditionLoaderYearV2, // year in the vectors (only the lowest year value that is not 0 will be used and converted to string, or empty string if all values are 0 or there are no values)
     #[serde(default)]
@@ -314,7 +348,7 @@ fn convert_to_jsonarray_v2(config: &Config, inputdata: BTreeMap<String, String>)
                 edition: edition_idx,
                 title: title,
                 author: record.author.clone().unwrap_or_default(),
-                location: edition.place_of_publication.clone().join(" "),
+                location: edition.place_of_publication.iter().map(ToString::to_string).collect::<Vec<String>>().join(" "),
                 year: year_string,
                 publication_type: publication_type_string.clone(),
                 allowed_years: (&edition_years).into(),
